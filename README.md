@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rounds
 
-## Getting Started
+A vendor table survey tool for Best Buy camera departments — Sony, Canon, Nikon. Open source, free to host, built for loginless use by field reps across ~1,000 stores.
 
-First, run the development server:
+**Status: Phase 0 (foundations) — see [`docs/WORKLOG.md`](docs/WORKLOG.md) for exactly where things stand.**
+
+## What this is
+
+Reps walk a store's camera tables and report what's broken, missing, or out of place. The CMS lets brand editors keep the catalog and planogram (what's supposed to be where) current. Every submitted "round" freezes a dated snapshot of what a rep actually found, independent of later catalog changes.
+
+Full design, data model, security spec, and build order: [`docs/ROUNDS-PLAN.md`](docs/ROUNDS-PLAN.md).
+
+## Stack
+
+Next.js 16 (App Router, TS strict) · Postgres on Neon (`neon-http` driver) · Drizzle ORM · Better Auth (CMS login only — the survey itself is loginless) · Tailwind v4 · Zod · IndexedDB write queue · Cloudflare Workers via OpenNext.
+
+## Local development
 
 ```bash
+npm install
+cp .env.example .env.local   # fill in DATABASE_URL (Neon) and other secrets
+npm run db:migrate
+npm run db:seed              # fictional demo data only — see docs/ROUNDS-PLAN.md §7 (S8)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Schema/constraint tests run against a **local** Postgres, not Neon (keeps CI fast and off Neon's free-tier quota):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# one-time setup, if not already running:
+#   sudo service postgresql start
+#   sudo -u postgres psql -c "CREATE DATABASE rounds_test;"
+npm run test
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
 
-## Learn More
+## License
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT — see [`LICENSE`](LICENSE).
