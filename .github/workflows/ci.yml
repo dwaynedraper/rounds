@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rounds_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Schema tests run against the local Postgres service above, never
+      # against Neon (plan §8 / primer hard rule 11) — CI never spends the
+      # free-tier quota just running tests.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rounds_test
+      # next build needs SOME DATABASE_URL present at import time even
+      # though it never connects during a static build — a placeholder is
+      # fine here since no route in this build touches the DB yet.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rounds_test
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Apply migrations to test DB
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rounds_test
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
