@@ -37,3 +37,10 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// OpenNext (Cloudflare) dev hook — makes getCloudflareContext() work during
+// `next dev` so local dev sees the same bindings/env the Worker will at
+// runtime. Canonical per @opennextjs/cloudflare get-started; no-op for the
+// production build. Confirmed against the installed 1.20.1 package.
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+initOpenNextCloudflareForDev();

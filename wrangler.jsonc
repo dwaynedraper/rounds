@@ -1,51 +1,52 @@
 {
-  // Rounds — Cloudflare Workers config via @opennextjs/cloudflare (plan §2, Appendix D).
-  // PLACEHOLDER IDS: r2 bucket / d1 database / durable object / rate-limit
-  // namespace ids below don't exist yet — they're created in the Cloudflare
-  // dashboard (or `wrangler` CLI) and filled in once Dean has an account
-  // connected, before Phase 3 (public write endpoints) needs the rate
-  // limiters and Phase 5 needs the cache bindings for real. Until then this
-  // file documents the *shape* the plan locked, not live resources.
+  // Rounds — Cloudflare Workers config via @opennextjs/cloudflare.
+  //
+  // PHASE 0: minimal, deploy-ready. Just what a hello-world OpenNext deploy
+  // needs — no caching bindings yet (see open-next.config.ts for why).
+  // Every binding here maps to a real, creatable resource, so `wrangler
+  // deploy` works today with nothing left as a placeholder.
+  //
+  // PHASE 3 (prep): add the caching stack — its exact shape is locked in
+  // docs/ROUNDS-PLAN.md Appendix D and mirrored in the commented block at
+  // the bottom of this file. It must be added in lockstep with switching
+  // open-next.config.ts to the full override setup: the two files have to
+  // agree, or the build/deploy fails.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "rounds",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
-
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
-  },
-
-  // Incremental cache (rendered pages/data) — plan Appendix D.
-  "r2_buckets": [
-    { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "rounds-cache" }
-  ],
-
-  // Tag cache (revalidateTag / revalidatePath) — plan Appendix D.
-  "d1_databases": [
-    { "binding": "NEXT_TAG_CACHE_D1", "database_name": "rounds-tags", "database_id": "REPLACE_ME" }
-  ],
-
-  // Revalidation queue — SQLite-backed Durable Object (required on the free
-  // plan, plan Appendix D / plan §8).
-  "durable_objects": {
-    "bindings": [
-      { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }
-    ]
-  },
-  "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }
-  ],
-
-  // Rate limiting (plan S2) — periods are 10s or 60s only.
-  "ratelimits": [
-    { "name": "RL_CONDITIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
-    { "name": "RL_ROUNDS",     "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } }
-  ],
-
-  // Monthly archival valve (plan §8 growth valve) — wired up in Phase 5.
-  "triggers": {
-    "crons": ["0 6 1 * *"]
   }
+
+  // ── PHASE 3 caching stack (do not enable piecemeal — see note above) ──
+  //
+  // "services": [
+  //   { "binding": "WORKER_SELF_REFERENCE", "service": "rounds" }
+  // ],
+  // "r2_buckets": [
+  //   { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "rounds-cache" }
+  // ],
+  // "d1_databases": [
+  //   { "binding": "NEXT_TAG_CACHE_D1", "database_name": "rounds-tags", "database_id": "<CREATE_AND_FILL>" }
+  // ],
+  // "durable_objects": {
+  //   "bindings": [
+  //     { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }
+  //   ]
+  // },
+  // "migrations": [
+  //   { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }
+  // ],
+  //
+  // ── Phase 3 rate limiters (plan S2) — periods are 10s or 60s only ──
+  // "ratelimits": [
+  //   { "name": "RL_CONDITIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+  //   { "name": "RL_ROUNDS",     "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } }
+  // ],
+  //
+  // ── Phase 5 monthly archival valve (plan §8) ──
+  // "triggers": { "crons": ["0 6 1 * *"] }
 }

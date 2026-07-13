@@ -6,7 +6,24 @@ Short, running log — date, what changed, what's next. Read this + `ROUNDS-PLAN
 
 ## 2026-07-13 — Phase 0 (foundations)
 
-**Status: mostly done. New blocker found (see bottom of this entry): the cloud sandbox this session builds in cannot reach Neon's network — `db:migrate`/`db:seed` against production has to run from Dean's own machine, not from here.**
+**Status: 2 of 4 done-when criteria fully green (schema tests + db:migrate/db:seed against real Neon, both confirmed). Remaining two (CI green on GitHub, hello page auto-deploys to workers.dev) both clear once Dean does a Cloudflare dashboard pass + first push. OpenNext deploy wiring is done and the Worker build is verified locally — see the Cloudflare deploy wiring entry below.**
+
+### Cloudflare / OpenNext deploy wiring (2026-07-13, done in sandbox)
+
+Dean chose to wire the deploy now rather than defer it (honoring the plan's "wire deploy day one" principle). Done on branch `feature/phase-0-cloudflare-deploy` → merged to `develop` → `main`:
+
+- `open-next.config.ts` — **minimal (defaults only) on purpose.** Nothing in the app caches yet (tag-based cache reads are Phase 3, plan §3), so R2/D1/DO bindings would be inert today, and every declared binding must map to a real resource or `wrangler deploy` fails. The full R2 + D1 + DO override setup (locked in plan Appendix D) is preserved as a commented block in both this file and `wrangler.jsonc`, to switch on in Phase-3 prep — the two files must change in lockstep (open-next overrides and wrangler bindings have to agree or the build breaks).
+- `wrangler.jsonc` — simplified to the minimal deploy-ready set (name, main, compat flags, assets binding). No placeholder resource IDs left that would break deploy. Full caching stack commented at the bottom.
+- `next.config.ts` — added `initOpenNextCloudflareForDev()` (canonical OpenNext dev hook; no-op for prod build).
+- `package.json` — added `cf:build`, `cf:preview`, `cf:deploy`, `cf:typegen` scripts.
+- `.gitignore` — ignores `/.open-next/`, `.wrangler`, `cloudflare-env.d.ts`. `.node-version` (22) added for Workers Builds.
+- **Verified in sandbox: `npx opennextjs-cloudflare build` succeeds** — produces `.open-next/worker.js`. That's the whole Next 16 → OpenNext → Worker bundle pipeline proven working before Dean touches the dashboard. All checked against the installed `@opennextjs/cloudflare` 1.20.1 (not memory).
+
+What this session CANNOT do (needs Dean): `wrangler deploy` itself (Cloudflare auth + network — sandbox has neither), creating the Cloudflare Workers project, and connecting the GitHub repo to Workers Builds. Exact steps handed to Dean in chat.
+
+### Neon network note
+
+**The cloud sandbox this session builds in cannot reach Neon's network** (`403 Host not in allowlist` on the Neon API host — outbound is allowlisted to package registries only, same class of restriction that blocked fonts.googleapis.com earlier). So `db:migrate`/`db:seed` against production was run by Dean on his own machine — **confirmed successful 2026-07-13**: migration applied, seed loaded (3 brands, 5 flags, 4 fictional products, 1 fixture, 5 positions, 2 demo stores). The seed ran through `src/db/index.ts` (the real neon-http runtime driver), so the production data path is proven working from Dean's machine. (Benign SSL deprecation warning from drizzle-kit's `pg` driver about a future pg v9 reinterpretation of `sslmode=require` — does not affect the neon-http runtime; future-proof later by pinning `sslmode=verify-full` if desired.)
 
 ### What changed
 
