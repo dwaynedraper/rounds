@@ -6,21 +6,46 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "db:generate": "node --env-file-if-exists=.env.local node_modules/.bin/drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=.env.local node_modules/.bin/drizzle-kit migrate",
+    "db:seed": "tsx --env-file-if-exists=.env.local scripts/seed.ts",
+    "db:studio": "node --env-file-if-exists=.env.local node_modules/.bin/drizzle-kit studio"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "better-auth": "^1.6.23",
+    "drizzle-orm": "^0.45.2",
+    "idb-keyval": "^6.3.0",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "resend": "^6.17.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.1",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "eslint-config-prettier": "^10.1.8",
+    "pg": "^8.22.0",
+    "prettier": "^3.9.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.110.0"
   }
 }
