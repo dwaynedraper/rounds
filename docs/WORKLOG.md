@@ -6,7 +6,7 @@ Short, running log — date, what changed, what's next. Read this + `ROUNDS-PLAN
 
 ## 2026-07-13 — Phase 0 (foundations)
 
-**Status: mostly done. One blocker: waiting on Dean's real Neon connection string to close out `db:migrate`/`db:seed` against production.**
+**Status: mostly done. New blocker found (see bottom of this entry): the cloud sandbox this session builds in cannot reach Neon's network — `db:migrate`/`db:seed` against production has to run from Dean's own machine, not from here.**
 
 ### What changed
 
@@ -33,14 +33,20 @@ Short, running log — date, what changed, what's next. Read this + `ROUNDS-PLAN
 
 ### Blocked on
 
-**Dean's real Neon `us-east-1` connection string.** Everything that doesn't need it is done and verified (schema, migration, generated SQL, constraint tests, CI, build). `npm run db:migrate && npm run db:seed` against the actual production Neon project — Phase 0's literal done-when wording — still needs to run once. Low risk (migration SQL already applies cleanly to a real Postgres 16 locally; Neon is Postgres 16-compatible), but not yet verified against the real target.
+**The cloud sandbox this session runs in cannot reach Neon.** `node --env-file .env.local` against the real `us-east-1` connection string returned `403 Host not in allowlist: api.c-9.us-east-1.aws.neon.tech` — this sandbox's outbound network is allowlisted to package registries (npm, git hosts) and not much else. Same root cause as the `fonts.googleapis.com` build failure earlier in Phase 0 (see below), just hitting a different host. **This means `npm run db:migrate` / `npm run db:seed` against production Neon has to run from Dean's own machine, in his own Terminal — not from this sandbox, and not via `device_bash` either (that has no network access at all, by design).** Everything else needed to run it is already correct and verified: schema, generated migration SQL (applies cleanly to real Postgres 16 locally), seed script, `.env.example`.
+
+### Repo/branch reconciliation (2026-07-13, mid-session)
+
+Dean independently fixed the same `.gitignore` bug (`.env.example` was matched by `.env*` and never got tracked) at the same time this session did, directly on his local `main` via his own Terminal. Reconciled by resetting `develop`/`feature/phase-0-db-verify` onto his `main`. In the process found his fix only patched `.gitignore`'s pattern — `.env.example` itself had never actually been committed on either side — so it was recreated and committed properly. All three branches (`main`, `develop`, `feature/phase-0-db-verify`) now converge at the same commit.
+
+**Standing pattern going forward:** the device bridge that syncs files to Dean's machine cannot delete or overwrite existing files (a deliberate restriction on it) — but git `checkout`/`reset` need to do exactly that whenever a tracked file changes across commits. Creating brand-new files through the bridge works fine; updating existing ones doesn't. So: this session keeps building in the cloud sandbox and hands Dean a git bundle after each sync point, but **Dean runs the `fetch` + `reset`/`merge` step himself, in his own Terminal** — not through `device_bash`. Same logic now applies to anything hitting Neon (see above): sandbox for building, Dean's own machine for git writes and DB writes.
 
 ### Not done yet (intentionally — later phases, not gaps)
 
 - No real Cloudflare resources exist yet (`wrangler.jsonc` has placeholder IDs) — GitHub repo isn't connected to Workers Builds yet either. Both are manual dashboard steps for Dean; revisit before Phase 3 needs the rate limiters for real and Phase 5 needs the cache bindings for real.
 - Better Auth isn't wired up yet (config exists only as a plan appendix) — that's literally what Phase 2 is.
-- No git commits made yet in this repo — everything above exists as files on disk, built in a cloud sandbox, pending delivery to Dean's machine and his own `git init`/push (see handoff message for exact commands).
+- Repo isn't pushed to GitHub yet — commits exist locally on Dean's machine (`~/projects/rounds`), remote `origin` is configured (points at his GitHub repo, default branch appears to be `master` there — worth checking/aligning with `main` before the first push), but no `git push` has happened yet.
 
 ### Next session
 
-Once the Neon connection string lands: run `db:migrate` + `db:seed` against it, confirm Phase 0's done-when is fully green, then start Phase 1 (design system — `@theme` tokens, primitives, `/kitchen-sink`) per plan §9.
+Waiting on Dean to run `npm install && npm run db:migrate && npm run db:seed` in his own Terminal against real Neon (this sandbox can't reach it — see above). Once he confirms success, Phase 0's done-when is fully green and Phase 1 (design system — `@theme` tokens, primitives, `/kitchen-sink`) starts per plan §9.
