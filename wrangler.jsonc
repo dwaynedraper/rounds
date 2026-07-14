@@ -19,7 +19,14 @@
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
-  }
+  },
+
+  // ── Phase 3 rate limiter (plan S2) — config-only, no dashboard resource
+  //    needed. The app falls back to an in-memory limiter when this is
+  //    absent (local dev), so the code works with or without it.
+  "ratelimits": [
+    { "name": "RL_CONDITIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }
+  ]
 
   // ── PHASE 3 caching stack (do not enable piecemeal — see note above) ──
   //
@@ -41,11 +48,8 @@
   //   { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }
   // ],
   //
-  // ── Phase 3 rate limiters (plan S2) — periods are 10s or 60s only ──
-  // "ratelimits": [
-  //   { "name": "RL_CONDITIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
-  //   { "name": "RL_ROUNDS",     "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } }
-  // ],
+  // ── Phase 4 adds RL_ROUNDS here (rounds submit endpoint) ──
+  // { "name": "RL_ROUNDS", "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } }
   //
   // ── Phase 5 monthly archival valve (plan §8) ──
   // "triggers": { "crons": ["0 6 1 * *"] }

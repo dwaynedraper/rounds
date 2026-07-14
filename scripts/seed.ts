@@ -2,11 +2,17 @@
 // Real planograms and store numbers live only in the production DB, never
 // in this repo — the repo is public from commit one.
 // Run via `npm run db:seed` (uses tsx --env-file=.env.local — no dotenv needed).
+import { randomUUID } from 'crypto'
 import { db } from '../src/db'
 import {
   brands, products, fixtures, fixtureBrands, sections, positions,
   stores, flags,
 } from '../src/db/schema'
+import { user } from '../src/db/auth-schema'
+
+// The email that becomes the first admin (S3 allowlist — only seeded/invited
+// emails can ever log in). Override with ADMIN_EMAIL when running the seed.
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? 'dean@sharpsightedstudio.com').toLowerCase()
 
 async function main() {
   console.log('Seeding fictional demo data...')
@@ -60,7 +66,13 @@ async function main() {
     { number: '0002', nickname: 'Demo Store B' },
   ])
 
-  console.log('Seed complete: 3 brands, 5 flags, 4 fictional products, 1 fixture, 5 positions, 2 demo stores.')
+  // First admin (CMS login allowlist, S3). Idempotent so re-seeding is safe.
+  await db
+    .insert(user)
+    .values({ id: randomUUID(), email: ADMIN_EMAIL, name: 'Admin', emailVerified: true, role: 'admin' })
+    .onConflictDoNothing()
+
+  console.log(`Seed complete: 3 brands, 5 flags, 4 fictional products, 1 fixture, 5 positions, 2 demo stores, admin ${ADMIN_EMAIL}.`)
   process.exit(0)
 }
 
