@@ -4,6 +4,21 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-14 — Live incident: PPR resume-stream corruption on Workers — ✅ fixed (survey moved to client-fetch)
+
+**Symptom (Dean, live):** raw React flight payload rendered as visible garbled text over the survey pages. **Diagnosis (verified in Dean's Chrome + curl):** the deployed HTML is malformed — the `@opennextjs/cloudflare` adapter (1.20.1, latest; PPR is on its supported list, so this is an adapter bug) interleaves a chunk into the middle of an inline flight `<script>` during the PPR two-phase (shell + resume) response on dynamic-param routes. Script never terminates → browser SyntaxError → "Connection closed" → payload tail parses as body text. Deterministic; triggered by the realignment's larger streamed payload (old deploy's fit one chunk).
+
+**Dead ends proven:** `use cache` on the page (and page+layout) does NOT remove the postponed segment for param routes — params are request data, so the resume stream remains (verified with a throwaway route on `next start`). No per-route PPR opt-out exists under cacheComponents (`experimental_ppr` removed; `force-dynamic` a no-op).
+
+**Fix (architecture, aligned with plan §5/§6):** the survey is now delivered ONLY over proven-good paths — static HTML + single-phase JSON:
+- New `GET /api/catalog` (+ `connection()` so the build doesn't prerender it against a placeholder DB) and `GET /api/stores/[number]/state` — thin wrappers over the same tagged `use cache` reads; Neon budget (§3) unchanged.
+- Survey pages are static client shells: `src/lib/client-data.ts` (`useStoreData` — catalog memo + per-store state fetch; `useSurveySegments` — URL read via `useSyncExternalStore` at mount, deliberately NOT Next `params`, which would re-open the resume stream), `StoreShell` (shared loading/missing/error states, `CreateStore` retry wiring), pages rebuilt on top. `buildReport` moved to `view.ts` (pure). `unstable_cacheTag` → stable `cacheTag`.
+- Verified: all three survey routes serve complete static HTML with ZERO postponed segments/headers; hydration proven in Playwright (shell → fetch → rendered state, no JS errors); typecheck/lint/29 tests/next build/opennext build green.
+
+**Known residual risk:** the CMS (admin) pages still server-stream (auth-gated, small payloads, 5 users) — same adapter bug could theoretically bite there; if it does, same fix applies. Consider filing the interleaving bug upstream at opennextjs-cloudflare with the byte-level evidence in this entry's session.
+
+---
+
 ## 2026-07-14 — Survey realignment (plan §1 #15) — 🚧 built + verified in sandbox, needs Dean's migrate + seed
 
 **What changed and why:** Dean's floor photos showed the built survey didn't match the physical tables. Realigned (v3 mockup approved by Dean): the floor plan is a FIXED constant — Canon · Nikon · Sony, two looks — and only camera assignments vary per store. Stores auto-create on entry. Reps build their store's layout from the admin-owned master list. Full decision record: plan §1 amendment #15.

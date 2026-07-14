@@ -1,17 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { getDeviceHash } from "@/lib/device";
 import { Button } from "@/components/ui/Button";
 
 /** Deep-link path into a store that doesn't exist yet (the keypad normally
  *  creates it before navigation). Deliberate tap, not auto-on-mount, so
  *  crawlers hitting GET /store/1234 never trigger writes. */
-export function CreateStore({ number }: { number: string }) {
+export function CreateStore({ number, onCreated }: { number: string; onCreated: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   async function create() {
     setBusy(true);
@@ -27,7 +25,7 @@ export function CreateStore({ number }: { number: string }) {
         setError(error ?? "could not set up store");
         return;
       }
-      router.refresh();
+      onCreated();
     } catch {
       setError("network error — try again");
     } finally {
