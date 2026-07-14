@@ -4,9 +4,13 @@ Short, running log — date, what changed, what's next. Read this + `ROUNDS-PLAN
 
 ---
 
-## 2026-07-13 — Phase 0 (foundations)
+## 2026-07-13 — Phase 0 (foundations) — ✅ COMPLETE
 
-**Status: 2 of 4 done-when criteria fully green (schema tests + db:migrate/db:seed against real Neon, both confirmed). Remaining two (CI green on GitHub, hello page auto-deploys to workers.dev) both clear once Dean does a Cloudflare dashboard pass + first push. OpenNext deploy wiring is done and the Worker build is verified locally — see the Cloudflare deploy wiring entry below.**
+**Status: all 4 done-when criteria green.** (1) Schema constraints verified by 18 Vitest tests. (2) `db:migrate` + `db:seed` confirmed against real Neon (Dean's machine). (3) GitHub Actions CI green on `main` — 3 runs passed (CI #1/#2/#3). (4) Hello page auto-deploys to workers.dev — **live at https://rounds.dean-221.workers.dev** via Workers Builds (OpenNext → Cloudflare, first deploy 2026-07-13, Worker cold-start 31 ms). Audited 2026-07-14 (see audit entry below) — clean, cleared to start Phase 1.
+
+### Deploy went live (2026-07-13)
+
+Cloudflare Workers Builds is connected to the GitHub repo on the **Dean@sharpsightedmedia.online** account (Worker name `rounds`, production branch `main`, build cmd `npx opennextjs-cloudflare build`, deploy cmd `npx wrangler deploy`, non-prod branches build with `wrangler versions upload` for preview URLs). Every push to `main` now auto-deploys. Two benign defaults noted in the deploy log: `workers_dev` URL auto-enabled (that's the live link) and preview URLs enabled for non-prod branches — both are Cloudflare defaults because they're not pinned in `wrangler.jsonc`; pin `workers_dev`/`preview_urls` explicitly later if desired (e.g. when moving to a custom domain). No runtime env vars set yet — the hello page touches no DB. `DATABASE_URL` gets added as a Worker secret before Phase 3.
 
 ### Cloudflare / OpenNext deploy wiring (2026-07-13, done in sandbox)
 
@@ -58,12 +62,19 @@ Dean independently fixed the same `.gitignore` bug (`.env.example` was matched b
 
 **Standing pattern going forward:** the device bridge that syncs files to Dean's machine cannot delete or overwrite existing files (a deliberate restriction on it) — but git `checkout`/`reset` need to do exactly that whenever a tracked file changes across commits. Creating brand-new files through the bridge works fine; updating existing ones doesn't. So: this session keeps building in the cloud sandbox and hands Dean a git bundle after each sync point, but **Dean runs the `fetch` + `reset`/`merge` step himself, in his own Terminal** — not through `device_bash`. Same logic now applies to anything hitting Neon (see above): sandbox for building, Dean's own machine for git writes and DB writes.
 
+GitHub default branch is now `main` (was `master` at repo creation — Dean switched the default and deleted the stray `master`, which only held an unrelated placeholder "Initial commit"). `main` and `develop` are pushed to `origin`.
+
 ### Not done yet (intentionally — later phases, not gaps)
 
-- No real Cloudflare resources exist yet (`wrangler.jsonc` has placeholder IDs) — GitHub repo isn't connected to Workers Builds yet either. Both are manual dashboard steps for Dean; revisit before Phase 3 needs the rate limiters for real and Phase 5 needs the cache bindings for real.
-- Better Auth isn't wired up yet (config exists only as a plan appendix) — that's literally what Phase 2 is.
-- Repo isn't pushed to GitHub yet — commits exist locally on Dean's machine (`~/projects/rounds`), remote `origin` is configured (points at his GitHub repo, default branch appears to be `master` there — worth checking/aligning with `main` before the first push), but no `git push` has happened yet.
+- The full R2 + D1 + Durable Object caching stack is not wired — deliberately deferred to Phase-3 prep (see the deploy wiring entry; the full config is preserved commented in `open-next.config.ts` + `wrangler.jsonc` + plan Appendix D). Nothing caches until there are real reads.
+- Rate limiters (plan S2) and the archival cron (plan §8) are commented in `wrangler.jsonc`, added when Phases 3/5 need them.
+- Better Auth isn't wired up yet (config exists only as plan Appendix C) — that's Phase 2.
+- Branch housekeeping (optional): `feature/phase-0-db-verify` and `feature/phase-0-cloudflare-deploy` are merged/stale and can be pruned whenever.
 
-### Next session
+### Next session — Phase 1 (design system)
 
-Waiting on Dean to run `npm install && npm run db:migrate && npm run db:seed` in his own Terminal against real Neon (this sandbox can't reach it — see above). Once he confirms success, Phase 0's done-when is fully green and Phase 1 (design system — `@theme` tokens, primitives, `/kitchen-sink`) starts per plan §9.
+Phase 0 is done and audited clean. Start Phase 1 per plan §9: Tailwind v4 `@theme` tokens (neutrals, 3 brand accents, type/spacing/radii — sharp corners, motion), fonts via `next/font/local` (self-hosted with the `.woff2` committed to the repo — NOT `next/font/google`, which fetches from Google at build time and would make every build depend on an external host; see amendment 5 in the amendments section above), component primitives (Button, Field, Chip, FlagToggle, Sheet, TablePlan), and the `/kitchen-sink` route rendering every component in every state.
+
+### Audit (2026-07-14)
+
+Full Phase-0 audit run before starting Phase 1. Result: **clean, no blockers.** Verified: typecheck / lint / 18 tests / `next build` / `opennextjs-cloudflare build` all green from scratch; git history carries no secrets and no `.env.local` (only `.env.example`, placeholders only); `.env.local` gitignored; seed data fictional (S8); S7 security headers confirmed compiled into the build (exact CSP in routes-manifest, applied to all document routes via the server function, not bypassed by the assets binding); schema.ts byte-identical to plan Appendix A; no stale `next-auth`/`us-east-2`/`master`-branch references in code. Minor/known items (none blocking): 2 moderate npm advisories (esbuild dev-server + PostCSS build-time — both non-exploitable in our context, no untrusted-input path, Dependabot tracks upstream fixes); `.gitignore` had a redundant `.env.*` line alongside `.env*` (cleaned up in the same commit as this entry); CSP still uses `'unsafe-inline'` for scripts/styles (Next default; nonce-based CSP is a future hardening, beyond plan S7 scope).
