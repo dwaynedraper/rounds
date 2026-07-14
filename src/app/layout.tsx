@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
@@ -27,7 +28,9 @@ export default function RootLayout({
       className={`${GeistSans.variable} ${GeistMono.variable} h-full`}
     >
       <body className="min-h-full flex flex-col bg-bg text-text font-sans">
-        {children}
+        {/* Suspense boundary so the html/body shell stays static (PPR) while
+            dynamic, per-request pages (the CMS, the survey) stream in. */}
+        <Suspense>{children}</Suspense>
       </body>
     </html>
   );

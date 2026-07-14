@@ -4,11 +4,13 @@
 // TypeScript types compile.
 import { describe, test, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import { eq } from 'drizzle-orm'
+import { randomUUID } from 'crypto'
 import { pool, testDb, migrateTestDb, resetTestDb } from './db-test-client'
 import {
   brands, products, fixtures, sections, positions, stores, storePositions,
-  conditions, productSnapshots, rounds, roundItems, users, userBrands,
+  conditions, productSnapshots, rounds, roundItems,
 } from '../src/db/schema'
+import { user, userBrands } from '../src/db/auth-schema'
 
 beforeAll(async () => {
   await migrateTestDb()
@@ -281,22 +283,22 @@ describe('foreign key integrity (no silent cascade deletes)', () => {
   })
 })
 
-describe('users + user_brands (brand scoping, plan S4)', () => {
+describe('user + user_brands (brand scoping, plan S4)', () => {
   test('user_brands composite PK prevents duplicate scoping rows', async () => {
     const brand = await seedBrand()
-    const [user] = await testDb.insert(users).values({
-      id: 'user-1', email: 'editor@example.com', role: 'editor',
+    const [u] = await testDb.insert(user).values({
+      id: randomUUID(), email: 'editor@example.com', role: 'editor',
     }).returning()
-    await testDb.insert(userBrands).values({ userId: user.id, brandId: brand.id })
+    await testDb.insert(userBrands).values({ userId: u.id, brandId: brand.id })
     await expect(
-      testDb.insert(userBrands).values({ userId: user.id, brandId: brand.id })
+      testDb.insert(userBrands).values({ userId: u.id, brandId: brand.id })
     ).rejects.toThrow()
   })
 
   test('email uniqueness is enforced', async () => {
-    await testDb.insert(users).values({ id: 'user-1', email: 'a@example.com' })
+    await testDb.insert(user).values({ id: randomUUID(), email: 'a@example.com' })
     await expect(
-      testDb.insert(users).values({ id: 'user-2', email: 'a@example.com' })
+      testDb.insert(user).values({ id: randomUUID(), email: 'a@example.com' })
     ).rejects.toThrow()
   })
 })

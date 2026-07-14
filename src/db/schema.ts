@@ -151,27 +151,13 @@ export const roundItems = pgTable('round_items', {
   check('round_items_note_length', sql`char_length(${t.note}) <= 280`),
 ])
 
-// ── USERS (CMS auth — Better Auth, decided 2026-07-13; see docs/WORKLOG.md) ─
-// Better Auth's own tables (accounts/sessions/verification) are generated
-// by `npx @better-auth/cli generate` in Phase 2, once the auth config
-// exists — they intentionally are NOT hand-written here to avoid drifting
-// from what the library actually expects. This table is OURS: it is the
-// row Better Auth's user table extends with a role + brand scope, and it's
-// what user_brands and audit_log.actor (email) reference.
-export const users = pgTable('users', {
-  id:            text('id').primaryKey(),
-  name:          text('name'),
-  email:         text('email').notNull().unique(), // stored lowercase
-  emailVerified: boolean('email_verified').notNull().default(false),
-  role:          userRole('role').notNull().default('editor'),
-  createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt:     timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
-
-export const userBrands = pgTable('user_brands', {
-  userId:  text('user_id').notNull().references(() => users.id),
-  brandId: integer('brand_id').notNull().references(() => brands.id),
-}, (t) => [primaryKey({ columns: [t.userId, t.brandId] })])
+// ── USERS (CMS auth) ────────────────────────────────────────────────────
+// The user/session/account/verification tables live in ./auth-schema.ts
+// (Better Auth owns them; `role` is added there as an additionalField).
+// user_brands (brand scoping, S4) also lives there, next to `user`, to keep
+// a single import direction (auth-schema imports from schema, never back).
+// The `userRole` enum above is shared by both files.
+// audit_log.actor is just text (email OR device_hash) — no FK to user.
 
 // ── AUDIT ────────────────────────────────────────────────────────────────
 export const auditLog = pgTable('audit_log', {

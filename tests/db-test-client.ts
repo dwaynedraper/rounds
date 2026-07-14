@@ -11,12 +11,13 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import * as schema from '../src/db/schema'
+import * as authSchema from '../src/db/auth-schema'
 
 const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/rounds_test'
 
 export const pool = new Pool({ connectionString: TEST_DATABASE_URL })
-export const testDb = drizzle(pool, { schema })
+export const testDb = drizzle(pool, { schema: { ...schema, ...authSchema } })
 
 export async function migrateTestDb() {
   await migrate(testDb, { migrationsFolder: './drizzle' })
@@ -25,7 +26,8 @@ export async function migrateTestDb() {
 const TABLES = [
   'audit_log', 'round_items', 'rounds', 'product_snapshots', 'conditions',
   'store_positions', 'stores', 'positions', 'sections', 'fixture_brands',
-  'fixtures', 'user_brands', 'users', 'flags', 'products', 'brands',
+  'fixtures', 'user_brands', 'session', 'account', 'verification', 'user',
+  'flags', 'products', 'brands',
 ]
 
 export async function resetTestDb() {
