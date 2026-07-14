@@ -1,26 +1,238 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Rounds — design tokens (Phase 1)
+   Direction: LIGHT & TECHNICAL, legibility-first.
+   Used on varying-quality phones on a bright retail floor, so:
+   pure-white surfaces, near-black text, strong (not hairline)
+   borders, high contrast, sharp corners, big tap targets.
+   Dark is defined as a swappable [data-theme="dark"] override
+   so it exists later — but LIGHT is the design target.
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* neutrals — the whole UI is built from these */
+  --bg: #ffffff; /* page */
+  --surface: #f6f6f7; /* panels, cards */
+  --surface-2: #ececee; /* raised / hover */
+  --surface-sunken: #fafafb; /* insets */
+  --border: #cbcbd2; /* clear, survives cheap screens + glare */
+  --border-strong: #9a9aa3; /* emphasized dividers, input borders */
+  --text: #0a0a0b; /* primary — max contrast */
+  --text-muted: #46464d; /* secondary — ~9:1 on white, AA+ */
+  --text-faint: #66666e; /* least important — ~5.3:1, AA */
+  --overlay: rgb(10 10 11 / 0.55); /* modal/sheet scrim */
+
+  /* primary interactive — near-black fill is the most legible
+     primary action on a bright floor */
+  --accent: #0a0a0b;
+  --accent-hover: #26262b;
+  --accent-ink: #ffffff;
+
+  /* focus ring — a distinct blue so it's unmistakable on any screen */
+  --ring: #1d4ed8;
+
+  /* brand accents — SIGNAL only (brand identification), plus the
+     legible ink color to place on top of each */
+  --brand-sony: #ff6f00;
+  --brand-sony-ink: #0a0a0b; /* black on orange */
+  --brand-canon: #c8102e;
+  --brand-canon-ink: #ffffff; /* white on red */
+  --brand-nikon: #ffe100;
+  --brand-nikon-ink: #0a0a0b; /* black on yellow — never white */
+
+  /* status — flags & system. Two forms each: a solid fill color,
+     and a darker `-text` variant that stays AA as text on white. */
+  --danger: #d4122a;
+  --danger-text: #b00d22;
+  --danger-ink: #ffffff;
+  --warn: #d97706;
+  --warn-text: #a1560a; /* darker so amber is legible as text on white */
+  --warn-ink: #0a0a0b;
+  --success: #15803d;
+  --success-text: #12692f;
+  --success-ink: #ffffff;
+  --info: #1d4ed8;
+  --info-text: #1e40af;
+  --info-ink: #ffffff;
+
+  /* radii — sharp; the physical table has hard corners */
+  --radius: 0px;
+  --radius-sm: 0px;
+
+  /* motion — restrained */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 110ms;
+  --dur: 170ms;
+
+  /* elevation — light mode leans on borders, not shadow. One soft
+     lift for overlays only. */
+  --shadow-pop: 0 8px 24px -8px rgb(10 10 11 / 0.25);
 }
 
+/* Dark theme — swappable, NOT the design target (kept in sync so it
+   exists when needed). Applied via <html data-theme="dark">. */
+[data-theme="dark"] {
+  --bg: #0a0a0b;
+  --surface: #141416;
+  --surface-2: #1e1e21;
+  --surface-sunken: #101012;
+  --border: #2c2c31;
+  --border-strong: #45454d;
+  --text: #f4f4f5;
+  --text-muted: #a6a6ad;
+  --text-faint: #78787f;
+  --overlay: rgb(0 0 0 / 0.65);
+
+  --accent: #f4f4f5;
+  --accent-hover: #d9d9dd;
+  --accent-ink: #0a0a0b;
+
+  --ring: #60a5fa;
+
+  --brand-sony-ink: #0a0a0b;
+  --brand-canon-ink: #ffffff;
+  --brand-nikon-ink: #0a0a0b;
+
+  --danger: #ef4444;
+  --danger-text: #f87171;
+  --warn: #f59e0b;
+  --warn-text: #fbbf24;
+  --success: #22c55e;
+  --success-text: #4ade80;
+  --info: #3b82f6;
+  --info-text: #60a5fa;
+
+  --shadow-pop: 0 8px 28px -6px rgb(0 0 0 / 0.6);
+}
+
+/* Map tokens to Tailwind utilities. `inline` means the generated
+   utilities reference the CSS vars directly, so switching data-theme
+   re-themes everything at runtime with no rebuild. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-ring: var(--ring);
+
+  --color-sony: var(--brand-sony);
+  --color-sony-ink: var(--brand-sony-ink);
+  --color-canon: var(--brand-canon);
+  --color-canon-ink: var(--brand-canon-ink);
+  --color-nikon: var(--brand-nikon);
+  --color-nikon-ink: var(--brand-nikon-ink);
+
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-danger-ink: var(--danger-ink);
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-warn-ink: var(--warn-ink);
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-ink: var(--success-ink);
+  --color-info: var(--info);
+  --color-info-text: var(--info-text);
+  --color-info-ink: var(--info-ink);
+
+  --radius-none: var(--radius);
+  --radius-sm: var(--radius-sm);
+
+  /* type scale — 16px base minimum; nothing on a phone should be
+     smaller than ~13px. Slightly larger than web defaults for floor
+     legibility. */
+  --text-2xs: 0.6875rem; /* 11px — micro labels only, uppercase */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.8125rem; /* 13px */
+  --text-xs--line-height: 1.1rem;
+  --text-sm: 0.9375rem; /* 15px */
+  --text-sm--line-height: 1.35rem;
+  --text-base: 1rem; /* 16px */
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem; /* 18px */
+  --text-lg--line-height: 1.6rem;
+  --text-xl: 1.375rem; /* 22px */
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.75rem; /* 28px */
+  --text-2xl--line-height: 2.1rem;
+  --text-3xl: 2.25rem; /* 36px */
+  --text-3xl--line-height: 2.5rem;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --ease-out: var(--ease-out);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ---- base layer ---- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%; /* don't let phones rescale text */
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Data — SKUs, store numbers, counts — render in mono. */
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Strong, unmistakable focus ring on every interactive element.
+     Never removed — legibility & a11y (plan Phase 1 done-when). */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--brand-sony);
+    color: var(--brand-sony-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }

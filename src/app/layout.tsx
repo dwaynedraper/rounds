@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
-// Phase 0 placeholder: system font stack, deliberately no next/font/google.
-// next/font/google fetches font files from fonts.googleapis.com at BUILD
-// time, which makes every build (local, CI, Cloudflare Workers Builds)
-// depend on reachability of an external host we don't control — exactly
-// the kind of dependency plan §2 says to avoid ("boring where boring is a
-// virtue"). Phase 1 (design system, plan §9) picks the real typeface; if
-// it's a Google Font, self-host it via next/font/local with the .woff2
-// committed to the repo instead, so builds never make an external call.
+// Fonts are self-hosted by the `geist` package (Phase 1). No build-time
+// fetch to fonts.googleapis.com — the .woff2 files ship inside the
+// dependency, so every build (local, CI, Workers Builds) is offline-safe.
+// GeistSans.variable sets --font-geist-sans; GeistMono sets --font-geist-mono;
+// globals.css maps those onto --font-sans / --font-mono.
+
 export const metadata: Metadata = {
   title: "Rounds",
   description: "Vendor table survey for Best Buy camera departments.",
@@ -19,9 +19,16 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Light is the default theme (no data-theme attribute). Dark is opt-in
+  // via data-theme="dark" — the /kitchen-sink page toggles it for review.
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+    <html
+      lang="en"
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full`}
+    >
+      <body className="min-h-full flex flex-col bg-bg text-text font-sans">
+        {children}
+      </body>
     </html>
   );
 }
