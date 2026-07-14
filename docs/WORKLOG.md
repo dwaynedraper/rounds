@@ -4,6 +4,26 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-14 — Phases 2 (CMS) & 3 (survey) — 🚧 built + verified in sandbox, awaiting Dean's infra steps
+
+**Status: both phases built, everything that can be verified in the sandbox is green** (typecheck / lint / 22 tests / next build / opennext build). The full app can't RUN in the sandbox (the `neon-http` driver is Neon-only), so the risky logic was verified directly against local Postgres instead: the Better Auth schema + S3 allowlist (Phase 2) and the condition write path — S1 existence checks, S6 last-write-wins, S5 audit (Phase 3, 4 dedicated tests). End-to-end flows (login email, live survey) are verified by Dean after the infra steps below.
+
+**Phase 2 (CMS)** — Better Auth magic-link (hand-modeled schema, `disableSignUp` = S3 allowlist, verified); role + brand scope (S4) enforced inside every mutation; Products CRUD + bulk paste import; Stores & Flags admin (admin-only); Planogram editor (assign product / planned-empty per position); Audit log viewer; admin shell + login. Migration `0001` replaces the old `users` table with the auth tables.
+
+**Phase 3 (survey)** — `/` store-entry landing (replaced the scaffold) → `/store/[number]` survey. `getCatalog`/`getStoreState` are `use cache` + tagged (plan §3). `POST /api/conditions` with S1 (Zod + 32KB cap + DB-truth checks), S2 (rate-limit binding + in-memory fallback, no IP stored), S5 (audit), S6 (LWW → 409). Device hash in localStorage (Phase-5 moves to IndexedDB). Copy-report output.
+
+### ⚠️ Dean's handoff checklist — do these in order to run Phases 2 & 3 live
+
+1. **Sync + push** the new commits (bundle) — same routine as before, then `git push`.
+2. **Migrate Neon:** `npm install && npm run db:migrate` (applies `0001` — creates the auth tables, drops the empty `users` table). Then **`npm run db:admin`** to add yourself as admin (defaults to `dean@sharpsightedstudio.com`; override with `ADMIN_EMAIL=...`). Do NOT re-run `db:seed` — it would collide with the existing Phase-0 seed data.
+3. **Resend:** create an API key (sending-access only). You'll set it as a Worker secret next.
+4. **Worker secrets** (Cloudflare dashboard → the `rounds` Worker → Settings → Variables, or `wrangler secret put`): `DATABASE_URL` (the Neon us-east-1 string), `BETTER_AUTH_SECRET` (generate: `openssl rand -base64 32`), `BETTER_AUTH_URL` (`https://rounds.dean-221.workers.dev`), `RESEND_API_KEY`, `AUTH_EMAIL_FROM`. Push → auto-deploy → the CMS login + survey go live.
+5. **(For the free-tier caching benefit — can wait until traffic grows):** provision R2 bucket `rounds-cache`, D1 db `rounds-tags`, and switch `open-next.config.ts` + `wrangler.jsonc` to the full caching stack (both have the exact config commented, plan Appendix D). Until then the survey works but caches per-instance instead of persistently. The rate-limit binding (S2) is already active in wrangler (no resource needed).
+
+### Next after infra: Phase 4 (round snapshots) + Phase 5 (offline queue). Design feedback on Phase 1 still applies and propagates through the shared components.
+
+---
+
 ## 2026-07-14 — Phase 1 (design system) — 🚧 first pass delivered, in design review
 
 **Status: first pass built and delivered; awaiting Dean's design feedback, then iterate.** Direction chosen by Dean: **LIGHT & TECHNICAL, legibility-first** (used on varying-quality phones on a bright Best Buy floor — dark washes out under fluorescents on cheap screens, so light + heavy contrast wins). Dark is kept as a swappable `[data-theme="dark"]` token set for later, not the target.

@@ -31,6 +31,10 @@ jobs:
       # though it never connects during a static build — a placeholder is
       # fine here since no route in this build touches the DB yet.
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rounds_test
+      # Better Auth reads these at module load; the build never authenticates,
+      # so CI placeholders are fine. Real values are Worker secrets in prod.
+      BETTER_AUTH_SECRET: ci-build-placeholder-secret-min-32-chars-xxxx
+      BETTER_AUTH_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v5
 
