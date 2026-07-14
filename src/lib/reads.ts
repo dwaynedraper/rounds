@@ -17,6 +17,8 @@ export type CatalogProduct = {
   id: number;
   quickName: string;
   brandSlug: string;
+  kind: string;
+  active: boolean;
 };
 
 export type CatalogPosition = { id: number; idx: number; masterProductId: number | null };
@@ -35,7 +37,7 @@ export async function getCatalog() {
 
   const [productRows, fixtureRows, sectionRows, positionRows, flagRows] =
     await Promise.all([
-      db.select({ id: products.id, quickName: products.quickName, brandSlug: brands.slug })
+      db.select({ id: products.id, quickName: products.quickName, brandSlug: brands.slug, kind: products.kind, active: products.active })
         .from(products).innerJoin(brands, eq(products.brandId, brands.id)),
       db.select().from(fixtures).orderBy(asc(fixtures.name)),
       db.select().from(sections).orderBy(asc(sections.sort)),

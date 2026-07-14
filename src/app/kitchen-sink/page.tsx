@@ -7,45 +7,49 @@ import { Field } from "@/components/ui/Field";
 import { BrandChip, StatusChip } from "@/components/ui/Chip";
 import { FlagToggle } from "@/components/ui/FlagToggle";
 import { Sheet } from "@/components/ui/Sheet";
-import {
-  TablePlan,
-  type PlanSection,
-  type PlanSlot,
-} from "@/components/ui/TablePlan";
+import { TableSlab } from "@/components/survey/TableSlab";
+import type { TableView } from "@/lib/view";
+
+
+// Fictional slab demos (S8 — never real layouts). Slot helper keeps it terse.
+const slot = (idx: number, name: string | null, flagged = false, kind: "camera" | "tablet" = "camera") => ({
+  positionId: idx + 1, idx, productId: name ? idx + 100 : null, name, kind,
+  flags: flagged ? ["alarm"] : [], note: "", capturedAt: null,
+});
+const DEMO_OAK: TableView = {
+  slug: "canon-table", brandSlug: "canon", name: "Canon", surface: "wood", flagCount: 1,
+  sides: [
+    { key: "left", label: "Left wall", sections: [
+      { key: "left-1", label: "L1", capacity: 5, slots: [slot(0, "Demo R"), slot(1, "Demo R2"), slot(2, null), slot(3, "Demo R3"), slot(4, null)] },
+      { key: "left-2", label: "L2", capacity: 5, slots: [slot(0, "Demo A"), slot(1, "Demo B"), slot(2, "Demo C"), slot(3, "Demo D"), slot(4, "Demo E")] },
+    ]},
+    { key: "right", label: "Right wall", sections: [
+      { key: "right-1", label: "R1", capacity: 5, slots: [slot(0, "Demo F", true), slot(1, "Demo G"), slot(2, "Demo H"), slot(3, null), slot(4, null)] },
+      { key: "right-2", label: "R2", capacity: 5, slots: [slot(0, "Demo I"), slot(1, "Demo J"), slot(2, "Demo K"), slot(3, "Demo L"), slot(4, null)] },
+    ]},
+  ],
+};
+const DEMO_GRAY: TableView = {
+  slug: "sony-table", brandSlug: "sony", name: "Sony", surface: "gray", flagCount: 0,
+  sides: [
+    { key: "end", label: "End", sections: [
+      { key: "end-1", label: "End", capacity: 4, slots: [slot(0, "Demo 1"), slot(1, "Demo 2"), slot(2, "Demo 3"), slot(3, "Demo 4")] },
+    ]},
+    { key: "left", label: "Left wall", sections: [
+      { key: "left-1", label: "L1", capacity: 5, slots: [slot(0, "Demo 5"), slot(1, "Demo 6"), slot(2, "Demo 7"), slot(3, "Demo 8"), slot(4, null)] },
+      { key: "left-2", label: "L2", capacity: 5, slots: [slot(0, "Demo 9"), slot(1, null), slot(2, "Demo 10"), slot(3, "Demo 11"), slot(4, null)] },
+    ]},
+    { key: "right", label: "Right wall", sections: [
+      { key: "right-1", label: "R1", capacity: 5, slots: [slot(0, "Demo 12"), slot(1, "Demo 13"), slot(2, "Demo T", false, "tablet"), slot(3, "Demo 14"), slot(4, null)] },
+      { key: "right-2", label: "R2", capacity: 5, slots: [slot(0, "Demo 15"), slot(1, "Demo 16"), slot(2, "Demo 17"), slot(3, "Demo 18"), slot(4, null)] },
+    ]},
+  ],
+};
 
 const ALL_ICONS: IconName[] = [
   "aperture", "shutter", "lens", "camera", "flag", "slot", "grid", "store",
   "clock", "search", "check", "x", "plus", "minus", "chevron-right",
   "chevron-down", "alert", "edit", "trash", "cloud-check", "cloud-pending",
-];
-
-const DEMO_SECTIONS: PlanSection[] = [
-  {
-    key: "endcap",
-    label: "Endcap",
-    slots: [
-      { id: 1, idx: 0, product: { quickName: "Demo Alpha 7", brand: "sony" } },
-      {
-        id: 2, idx: 1, product: { quickName: "Demo EOS R", brand: "canon" },
-        flags: [{ tone: "danger", label: "broken" }],
-      },
-      {
-        id: 3, idx: 2, product: { quickName: "Demo Z6", brand: "nikon" },
-        flags: [{ tone: "warn", label: "demo mode off" }],
-      },
-      { id: 4, idx: 3, product: null },
-    ],
-  },
-  {
-    key: "lens",
-    label: "Lens Wall",
-    slots: [
-      {
-        id: 5, idx: 0, product: { quickName: "Demo 24-70 Lens", brand: "sony" },
-        flags: [{ tone: "danger", label: "missing" }, { tone: "info", label: "wrong lens" }],
-      },
-    ],
-  },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -76,7 +80,6 @@ export default function KitchenSink() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [flags, setFlags] = useState({ broken: false, missing: true, demo: false });
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [selected, setSelected] = useState<PlanSlot | null>(null);
 
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";
@@ -223,18 +226,19 @@ export default function KitchenSink() {
         </div>
       </Section>
 
-      <Section title="Table plan (tap a slot)">
-        <TablePlan
-          sections={DEMO_SECTIONS}
-          onSelectSlot={(slot) => {
-            setSelected(slot);
-            setSheetOpen(true);
-          }}
-        />
+      <Section title="Table slabs (the survey drawing)">
+        <div className="flex flex-col gap-4">
+          <TableSlab table={DEMO_OAK} height={120} camSize={17} />
+          <TableSlab table={DEMO_GRAY} height={120} camSize={17} />
+          <p className="text-xs text-text-faint">
+            Oak island (left-wall section 2 shows the 5-camera spread; empty slots hold their spacing)
+            and the Sony endcap table (end + two walls, black dividers, tablet slot).
+          </p>
+        </div>
       </Section>
 
       <Section title="Sheet">
-        <Button variant="secondary" icon="grid" onClick={() => { setSelected(null); setSheetOpen(true); }}>
+        <Button variant="secondary" icon="grid" onClick={() => setSheetOpen(true)}>
           Open bottom sheet
         </Button>
       </Section>
@@ -242,7 +246,7 @@ export default function KitchenSink() {
       <Sheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        title={selected?.product ? selected.product.quickName : selected ? "Empty slot" : "Slot detail"}
+        title="Slot detail"
         footer={
           <div className="flex gap-2">
             <Button variant="secondary" block onClick={() => setSheetOpen(false)}>Cancel</Button>
@@ -251,7 +255,7 @@ export default function KitchenSink() {
         }
       >
         <div className="flex flex-col gap-4">
-          {selected?.product && <BrandChip brand={selected.product.brand} className="self-start" />}
+          <BrandChip brand="sony" className="self-start" />
           <p className="text-sm text-text-muted">
             Mark what you found on this slot. (Demo — wired to real conditions in Phase 3.)
           </p>

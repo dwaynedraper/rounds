@@ -60,6 +60,31 @@ export const conditionWrite = z.object({
 });
 export type ConditionWrite = z.infer<typeof conditionWrite>;
 
+// B3 — POST /api/layout (plan §1 #15c: reps assign master-list products to
+// fixed slots). productId null = clear the slot. Server re-checks that every
+// position exists and every product exists AND is active.
+export const layoutWrite = z.object({
+  storeNumber,
+  deviceHash,
+  assignments: z
+    .array(
+      z.object({
+        positionId: z.number().int().positive(),
+        productId: z.number().int().positive().nullable(),
+      }),
+    )
+    .min(1)
+    .max(32),
+});
+export type LayoutWrite = z.infer<typeof layoutWrite>;
+
+// POST /api/stores — enter (auto-create, plan §1 #15b)
+export const storeEnter = z.object({
+  number: storeNumber,
+  deviceHash,
+});
+export type StoreEnter = z.infer<typeof storeEnter>;
+
 // B2 — POST /api/rounds
 export const roundSubmit = z.object({
   storeNumber,

@@ -17,7 +17,7 @@ async function seed() {
     brandId: brand.id, quickName: "A7", longName: "Alpha 7", model: "M", sku: "1234567", kind: "camera",
   }).returning();
   const [fixture] = await testDb.insert(fixtures).values({ slug: "e1", name: "Endcap", layoutKind: "endcap", surface: "gray" }).returning();
-  const [section] = await testDb.insert(sections).values({ fixtureId: fixture.id, key: "endcap", label: "Endcap" }).returning();
+  const [section] = await testDb.insert(sections).values({ fixtureId: fixture.id, key: "end-1", label: "End" }).returning();
   const [position] = await testDb.insert(positions).values({ sectionId: section.id, idx: 0, productId: product.id }).returning();
   const [store] = await testDb.insert(stores).values({ number: "0058" }).returning();
   await testDb.insert(flags).values([

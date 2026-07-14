@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rounds — flow mockups v3 (illustration-style tables)</title>
+<style>
+  :root{
+    --ink:#14181f; --ink-soft:#48505c; --line:#d8dde5; --bg:#eef1f5; --card:#fff;
+    --brand:#0f4c9c;
+    --alarm:#b4232a; --nopower:#b26a00; --broken:#7a3ca3; --missing:#0f6b57;
+    --chip:#f2f4f8;
+    --cam:#2e343c; --cam-flag:#b4232a;
+    --shadow:0 1px 2px rgba(20,24,31,.06),0 6px 20px rgba(20,24,31,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;padding:28px 20px 60px}
+  .head{max-width:1180px;margin:0 auto 22px}
+  .head h1{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
+  .head p{margin:0;color:var(--ink-soft);font-size:14px;line-height:1.5;max-width:860px}
+  .rail{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:26px;align-items:start}
+  .screen{background:var(--card);border:1px solid var(--line);border-radius:26px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:560px}
+  .cap{font-size:12px;font-weight:600;color:var(--ink-soft);padding:10px 14px 0;letter-spacing:.02em;text-transform:uppercase}
+  .cap small{display:block;text-transform:none;font-weight:400;letter-spacing:0;margin-top:2px;color:#8a92a0}
+  .app{margin:8px;border:1px solid var(--line);border-radius:20px;overflow:hidden;flex:1;display:flex;flex-direction:column;background:#fff}
+  .bar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);min-height:52px}
+  .bar .back{font-size:20px;color:var(--ink-soft);width:18px}
+  .bar .title{font-weight:700;font-size:16px;letter-spacing:-.01em}
+  .bar .sub{font-size:12px;color:var(--ink-soft);font-weight:500}
+  .bar .spacer{flex:1}
+  .body{padding:14px;flex:1;display:flex;flex-direction:column;gap:12px}
+  .hint{font-size:11.5px;color:#8a92a0;line-height:1.45;background:#f7f9fc;border:1px dashed var(--line);border-radius:10px;padding:8px 10px}
+  .cta{background:var(--brand);color:#fff;border:none;border-radius:12px;padding:15px;font-size:16px;font-weight:700;text-align:center}
+
+  /* ------- screen 1: entry (unchanged, Dean-approved) ------- */
+  .enter-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;padding:8px 2px}
+  .enter-num{font-size:40px;font-weight:800;letter-spacing:.06em;text-align:center;border:2px solid var(--line);border-radius:14px;padding:14px}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .key{background:var(--chip);border:1px solid var(--line);border-radius:12px;padding:16px 0;text-align:center;font-size:22px;font-weight:600}
+  .newnote{font-size:12px;color:var(--missing);font-weight:600;text-align:center}
+
+  /* ------- illustration-style tables ------- */
+  .slab{position:relative;width:100%;border:1px solid #c9cfd8;border-radius:0;overflow:hidden}
+  .slab.oak{
+    background:
+      repeating-linear-gradient(180deg, rgba(146,106,52,.10) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(180deg, transparent 0 11px, rgba(126,88,40,.07) 11px 13px),
+      linear-gradient(180deg,#efe0bd,#e7d5ae);
+  }
+  .slab.marble{
+    background:
+      repeating-linear-gradient(105deg, transparent 0 16px, rgba(116,124,136,.14) 16px 17px, transparent 17px 34px),
+      repeating-linear-gradient(75deg, transparent 0 26px, rgba(116,124,136,.08) 26px 27px, transparent 27px 52px),
+      linear-gradient(180deg,#dde1e6,#d2d7dd);
+  }
+  .tv{position:absolute;top:3%;bottom:3%;right:0;width:7%;
+    background:linear-gradient(180deg,#f2f2f2,#a7adb4 32%,#e6e7e9 55%,#82888f 100%);
+    border-left:1px solid #9aa0a6}
+  .spine{position:absolute;background:#fff}          /* oak: pale center spine */
+  .spine.dark{background:#17191d}                     /* sony: black dividers   */
+  .cam{position:absolute;width:24px;height:26px;transform:translate(-50%,-50%)}
+  .cam svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px rgba(20,24,31,.25))}
+  .cam.flg svg{color:var(--cam-flag)!important}
+  .cam.flg::after{content:"";position:absolute;inset:-4px;border:2px solid var(--cam-flag);border-radius:50%}
+  .cam .tab{fill:#3d434c}
+  .emptyslot{position:absolute;width:20px;height:20px;transform:translate(-50%,-50%);border:1.5px dashed rgba(20,24,31,.30);border-radius:5px}
+  .brandtag{position:absolute;left:10px;top:50%;transform:translateY(-50%);
+    font-weight:800;font-size:15px;letter-spacing:-.01em;background:rgba(255,255,255,.82);
+    padding:3px 10px;border:1px solid rgba(20,24,31,.12)}
+  .stat{position:absolute;right:9%;top:6px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .stat.clear{background:#e7f4ef;color:var(--missing)}
+  .stat.flags{background:#fbeaea;color:var(--alarm)}
+
+  /* single-table view side hit zones */
+  .zone{position:absolute;border:2px solid transparent}
+  .zone .zl{position:absolute;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--brand);background:rgba(255,255,255,.9);padding:2px 7px;border:1px solid var(--brand);border-radius:999px}
+  .zone.hot{border-color:var(--brand);background:rgba(15,76,156,.07)}
+
+  /* ------- side view (record / edit) ------- */
+  .toggle{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;font-size:12.5px;font-weight:700}
+  .toggle div{flex:1;text-align:center;padding:8px 4px;color:var(--ink-soft)}
+  .toggle .on{background:var(--brand);color:#fff}
+  .toggle.editing .on{background:var(--nopower)}
+  .sidehead{font-size:12px;color:var(--ink-soft);font-weight:600}
+  .cols{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 10px;flex:1}
+  .col{flex:0 0 128px;display:flex;flex-direction:column;gap:8px}
+  .pos{font-size:10px;font-weight:800;color:#9aa2ae;text-align:center;letter-spacing:.05em}
+  .cname{border:1.5px solid var(--line);border-radius:10px;padding:10px 8px;font-size:13px;font-weight:700;text-align:center;min-height:44px;display:flex;align-items:center;justify-content:center}
+  .cname.hasflag{border-color:var(--alarm);background:#fdf1f1}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .fb{border:1.5px solid var(--line);border-radius:9px;padding:9px 2px;font-size:10.5px;font-weight:700;text-align:center;color:var(--ink-soft)}
+  .fb.on-alarm{background:#fbeaea;border-color:var(--alarm);color:var(--alarm)}
+  .notebtn{font-size:11px;color:var(--brand);font-weight:700;text-align:center}
+  .secdiv{flex:0 0 14px;display:flex;align-items:center;justify-content:center}
+  .secdiv i{width:0;border-left:2px dashed var(--line);height:88%}
+  .scrollhint{font-size:11px;color:#9aa2ae;text-align:center}
+  /* edit-mode variants */
+  .pick{border-style:dashed;color:var(--ink);position:relative}
+  .pick::after{content:"▾";position:absolute;right:7px;color:var(--brand);font-size:11px}
+  .pick.empty{color:#9aa2ae;font-weight:500}
+  .addfifth{border:1.5px dashed var(--line);border-radius:9px;padding:8px;font-size:11px;font-weight:700;color:var(--brand);text-align:center}
+  .editbar{background:#fbf1e2;border:1px solid var(--nopower);color:var(--nopower);font-size:11.5px;font-weight:700;border-radius:9px;padding:7px 10px;text-align:center}
+</style>
+</head>
+<body>
+<div class="head">
+  <h1>Rounds — flow v3</h1>
+  <p>Tables now drawn your way: square slabs, texture base, camera SVGs placed on an even grid and rotated to face out. Sections hold 4 slots (5 when needed — see Canon left wall, section 2); empty slots keep their spacing. Side naming is <b>viewed from the end cap</b> — verify that below. These table graphics are generated by the same config→grid code the app will use, so what you approve here is what ships.</p>
+</div>
+
+<div class="rail">
+
+  <!-- 1 ENTRY -->
+  <div class="screen">
+    <div class="cap">1 · Enter store <small>Unchanged — you approved it</small></div>
+    <div class="app">
+      <div class="bar"><span class="title">Rounds</span><span class="spacer"></span><span class="sub">field survey</span></div>
+      <div class="body"><div class="enter-wrap">
+        <div style="font-size:13px;color:var(--ink-soft);text-align:center;font-weight:600">Store number</div>
+        <div class="enter-num">0148</div>
+        <div class="newnote">New store — we'll set it up on enter</div>
+        <div class="pad"><div class="key">1</div><div class="key">2</div><div class="key">3</div><div class="key">4</div><div class="key">5</div><div class="key">6</div><div class="key">7</div><div class="key">8</div><div class="key">9</div><div class="key">⌫</div><div class="key">0</div><div class="key">↵</div></div>
+        <div class="cta">Enter store 0148 →</div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- 2 OVERVIEW -->
+  <div class="screen">
+    <div class="cap">2 · Store overview <small>Canon · Nikon · Sony — fixed order, tap a table</small></div>
+    <div class="app">
+      <div class="bar"><span class="title">Store 0148</span><span class="spacer"></span><span class="sub">3 tables</span></div>
+      <div class="body" id="ov"></div>
+    </div>
+  </div>
+
+  <!-- 3 SINGLE TABLE OAK -->
+  <div class="screen">
+    <div class="cap">3 · Single table — Canon <small>Zoomed. Tap a side to open it</small></div>
+    <div class="app">
+      <div class="bar"><span class="back">‹</span><span class="title">Canon</span><span class="spacer"></span><span class="sub">2 sides</span></div>
+      <div class="body" id="tblCanon"></div>
+    </div>
+  </div>
+
+  <!-- 3b SINGLE TABLE SONY -->
+  <div class="screen">
+    <div class="cap">3b · Single table — Sony <small>Same view, its real shape: end + two walls</small></div>
+    <div class="app">
+      <div class="bar"><span class="back">‹</span><span class="title">Sony</span><span class="spacer"></span><span class="sub">3 sides</span></div>
+      <div class="body" id="tblSony"></div>
+    </div>
+  </div>
+
+  <!-- 4 SIDE VIEW RECORD -->
+  <div class="screen">
+    <div class="cap">4 · Side view — record <small>Your v1 format: names in a row, 4 buttons under each</small></div>
+    <div class="app">
+      <div class="bar"><span class="back">‹</span><span class="title">Sony · Right Wall</span></div>
+      <div class="body">
+        <div class="toggle"><div class="on">Record</div><div>Edit layout</div></div>
+        <div class="sidehead">viewed from the end cap · left → right</div>
+        <div class="cols">
+          <div class="col"><div class="pos">1</div><div class="cname">A7C II</div><div class="fgrid"><div class="fb">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn">＋ note</div></div>
+          <div class="col"><div class="pos">2</div><div class="cname">A7 III</div><div class="fgrid"><div class="fb">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn">＋ note</div></div>
+          <div class="col"><div class="pos">3</div><div class="cname hasflag">A7 IV</div><div class="fgrid"><div class="fb on-alarm">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn" style="color:var(--alarm)">1 note ›</div></div>
+          <div class="col"><div class="pos">4</div><div class="cname">Tablet</div><div class="fgrid"><div class="fb">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn">＋ note</div></div>
+          <div class="secdiv"><i></i></div>
+          <div class="col"><div class="pos">5</div><div class="cname">A6700</div><div class="fgrid"><div class="fb">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn">＋ note</div></div>
+          <div class="col"><div class="pos">6</div><div class="cname">A6400</div><div class="fgrid"><div class="fb">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn">＋ note</div></div>
+          <div class="col"><div class="pos">7</div><div class="cname">A6100</div><div class="fgrid"><div class="fb">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn">＋ note</div></div>
+          <div class="col"><div class="pos">8</div><div class="cname">RX100 VII</div><div class="fgrid"><div class="fb">Alarm</div><div class="fb">No Power</div><div class="fb">Broken</div><div class="fb">Missing</div></div><div class="notebtn">＋ note</div></div>
+        </div>
+        <div class="scrollhint">← swipe · positions run left → right as you face the wall →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 SIDE VIEW EDIT -->
+  <div class="screen">
+    <div class="cap">5 · Side view — edit layout <small>Same screen, toggled. Header goes amber so you can't miss the mode</small></div>
+    <div class="app">
+      <div class="bar"><span class="back">‹</span><span class="title">Sony · Right Wall</span></div>
+      <div class="body">
+        <div class="toggle editing"><div>Record</div><div class="on">Edit layout</div></div>
+        <div class="editbar">Editing this store's layout — pick models from the master list</div>
+        <div class="cols">
+          <div class="col"><div class="pos">1</div><div class="cname pick">A7C II</div><div class="addfifth" style="visibility:hidden">.</div></div>
+          <div class="col"><div class="pos">2</div><div class="cname pick">A7 III</div></div>
+          <div class="col"><div class="pos">3</div><div class="cname pick">A7 IV</div></div>
+          <div class="col"><div class="pos">4</div><div class="cname pick empty">— empty —</div><div class="addfifth">＋ 5th slot</div></div>
+          <div class="secdiv"><i></i></div>
+          <div class="col"><div class="pos">5</div><div class="cname pick">A6700</div></div>
+          <div class="col"><div class="pos">6</div><div class="cname pick">A6400</div></div>
+        </div>
+        <div class="hint">Tapping a slot opens the master list (admin-maintained). Empty slots keep their spot — spacing on the table view doesn't shift until a 5th camera is added.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- top-down camera, lens pointing DOWN. fill = currentColor -->
+    <symbol id="camtd" viewBox="0 0 40 44">
+      <rect x="5" y="5" width="30" height="15" rx="2" fill="currentColor"/>
+      <rect x="26" y="2" width="8" height="5" rx="1.5" fill="currentColor" opacity=".8"/>
+      <rect x="8" y="8" width="7" height="4" rx="1" fill="#fff" opacity=".25"/>
+      <circle cx="20" cy="29" r="11" fill="currentColor"/>
+      <circle cx="20" cy="29" r="6.5" fill="#0e1116"/>
+      <circle cx="20" cy="29" r="3" fill="#39424e"/>
+    </symbol>
+    <symbol id="tabtd" viewBox="0 0 40 44">
+      <rect x="8" y="6" width="24" height="32" rx="3" fill="currentColor"/>
+      <rect x="11" y="9" width="18" height="24" rx="1.5" fill="#9fc4e8"/>
+    </symbol>
+  </defs>
+</svg>
+
+<script>
+// ---- the same config -> grid approach the app will use ----
+// A side = sections; a section = fixed slot count (4 default, 5 max).
+// x positions are computed per section; empty slots keep spacing.
+const F = true; // flagged marker
+
+const TABLES = {
+  canon:{look:'oak',label:'Canon',stat:['clear','All clear'],
+    walls:{ top:[['R100','R50','R10',null],['R8','R6 II','R5','R7','V10']],       // 5-cam section demo
+            bot:[['T7','R100','R50',null],['R8','R7','V10','R5']] }},
+  nikon:{look:'oak',label:'Nikon',stat:['flags','2 flags'],
+    walls:{ top:[[{n:'Z5'},{n:'Z50',f:F},{n:'Zf'},null],[{n:'Z6III'},{n:'Z8'},{n:'Z7II'},null]],
+            bot:[[{n:'Z30'},{n:'Z50'},null,null],[{n:'Zfc'},{n:'Z6III',f:F},{n:'Z8'},{n:'Z5'}]] }},
+  sony:{look:'marble',label:'Sony',stat:['clear','All clear'],
+    end:['A1','A9 III','A7R V','ZV-E1'],
+    walls:{ top:[['A7R V','A7 IV','A7C II','FX30'],['ZV-E10','ZV-1 II','A7 III','A6700']],
+            bot:[['A7C II','A7 III',{n:'TAB',t:true},'A7 IV'],['A6700','A6400','A6100','RX100']] }}
+};
+
+function cam(x,y,rot,item,scale){
+  if(item===null||item===undefined)
+    return `<div class="emptyslot" style="left:${x}%;top:${y}%;width:${scale*0.8}px;height:${scale*0.8}px"></div>`;
+  const o = typeof item==='string' ? {n:item} : item;
+  const sym = o.t ? 'tabtd' : 'camtd';
+  return `<div class="cam ${o.f?'flg':''}" style="left:${x}%;top:${y}%;width:${scale}px;height:${scale*1.1}px;color:var(--cam);transform:translate(-50%,-50%) rotate(${rot}deg)">
+    <svg viewBox="0 0 40 44"><use href="#${sym}"/></svg></div>`;
+}
+
+// place one wall's sections along [x0,x1] at row y; rot: 180 = face up, 0 = face down
+function wall(sections,x0,x1,y,rot,scale){
+  let html=''; const gap=1.5;
+  const w=(x1-x0-gap)/sections.length;
+  sections.forEach((sec,si)=>{
+    const sx=x0+si*(w+gap);
+    const n=sec.length; // 4 or 5 slots — 5-cam section spreads evenly across 5
+    sec.forEach((it,i)=>{ html+=cam(sx+(i+0.5)/n*w, y, rot, it, scale); });
+  });
+  return html;
+}
+
+function slab(t,h,scale,zones){
+  let inner=`<div class="tv"></div>`;
+  const X0=3, X1=90;
+  if(t.look==='oak'){
+    inner+=`<div class="spine" style="left:${X0}%;right:${100-X1}%;top:47%;height:6%"></div>`;
+    inner+=wall(t.walls.top,X0,X1,24,180,scale);
+    inner+=wall(t.walls.bot,X0,X1,76,0,scale);
+  }else{
+    inner+=`<div class="spine dark" style="left:11%;width:2.4%;top:4%;bottom:4%"></div>`;
+    inner+=`<div class="spine dark" style="left:11%;right:${100-X1}%;top:47.5%;height:5%"></div>`;
+    t.end.forEach((it,i)=>{ inner+=cam(6,(i+0.5)/t.end.length*100,90,it,scale); });
+    inner+=wall(t.walls.top,15,X1,24,180,scale);
+    inner+=wall(t.walls.bot,15,X1,76,0,scale);
+  }
+  if(zones) inner+=zones;
+  return `<div class="slab ${t.look}" style="height:${h}px">${inner}</div>`;
+}
+
+// overview: three fixed tables, brand overlaid
+document.getElementById('ov').innerHTML =
+  ['canon','nikon','sony'].map(k=>{
+    const t=TABLES[k];
+    return `<div style="position:relative">
+      ${slab(t,104,15)}
+      <div class="brandtag">${t.label}</div>
+      <div class="stat ${t.stat[0]}">${t.stat[1]}</div>
+    </div>`;
+  }).join('') + `<div class="hint">Fixed floor order — Canon, Nikon, Sony. Square slabs, real proportions, screen at the far end. Red ring = flagged camera.</div>`;
+
+// single table: canon with tappable sides
+document.getElementById('tblCanon').innerHTML =
+  slab(TABLES.canon,210,24,
+    `<div class="zone hot" style="left:2%;right:9%;top:3%;height:44%"><span class="zl" style="left:8px;top:8px">Left wall — tap</span></div>
+     <div class="zone" style="left:2%;right:9%;bottom:3%;height:44%"><span class="zl" style="left:8px;bottom:8px">Right wall</span></div>`)
+  + `<div class="hint">Zoomed view of the same drawing. Two sides, two sections each. Left/right named as you face it from the end cap. Section 2 up top is the 5-camera case — grid spread across 5.</div>`;
+
+// single table: sony with 3 zones
+document.getElementById('tblSony').innerHTML =
+  slab(TABLES.sony,210,24,
+    `<div class="zone" style="left:1%;width:10%;top:3%;bottom:3%"><span class="zl" style="left:4px;top:8px">End</span></div>
+     <div class="zone" style="left:12%;right:9%;top:3%;height:42%"><span class="zl" style="left:8px;top:8px">Left wall</span></div>
+     <div class="zone hot" style="left:12%;right:9%;bottom:3%;height:42%"><span class="zl" style="left:8px;bottom:8px">Right wall — tap</span></div>`)
+  + `<div class="hint">Sony keeps its real shape: short end (4 cameras), two walls, black dividers, tablet in the right wall. Tapping a side opens screen 4.</div>`;
+</script>
+</body>
+</html>
