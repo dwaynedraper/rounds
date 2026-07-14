@@ -98,3 +98,27 @@ export function visibleSlotCount(section: SectionView): number {
   if (section.capacity === 4) return 4;
   return section.slots[4]?.name != null ? 5 : 4;
 }
+
+/** Plain-text issue report (plan Phase 3: generate output + copy). Pure —
+ *  runs wherever the views were built. */
+export function buildReport(number: string, nickname: string | null, tables: TableView[]): string {
+  const lines = [`Store ${number}${nickname ? ` (${nickname})` : ""}`, ""];
+  let any = false;
+  for (const table of tables) {
+    for (const side of table.sides) {
+      for (const section of side.sections) {
+        const n = visibleSlotCount(section);
+        for (let i = 0; i < n; i++) {
+          const slot = section.slots[i];
+          if (!slot.name || slot.flags.length === 0) continue;
+          any = true;
+          lines.push(
+            `${table.name} / ${side.label} #${i + 1} — ${slot.name}: ${slot.flags.join(", ")}${slot.note ? ` — ${slot.note}` : ""}`,
+          );
+        }
+      }
+    }
+  }
+  if (!any) lines.push("No issues found.");
+  return lines.join("\n");
+}

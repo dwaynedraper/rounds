@@ -1,4 +1,4 @@
-import { unstable_cacheTag as cacheTag } from "next/cache";
+import { cacheTag } from "next/cache";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
