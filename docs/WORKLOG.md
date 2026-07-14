@@ -1,6 +1,24 @@
 # Worklog
 
-Short, running log — date, what changed, what's next. Read this + `ROUNDS-PLAN.md` §9 at the start of every session.
+Short, running log — date, what changed, what's next. Newest first. Read this + `ROUNDS-PLAN.md` §9 at the start of every session.
+
+---
+
+## 2026-07-14 — Phase 1 (design system) — 🚧 first pass delivered, in design review
+
+**Status: first pass built and delivered; awaiting Dean's design feedback, then iterate.** Direction chosen by Dean: **LIGHT & TECHNICAL, legibility-first** (used on varying-quality phones on a bright Best Buy floor — dark washes out under fluorescents on cheap screens, so light + heavy contrast wins). Dark is kept as a swappable `[data-theme="dark"]` token set for later, not the target.
+
+Built (branch `feature/phase-1-design-system`, commit 88c3f17):
+- `src/app/globals.css` — Tailwind v4 `@theme` token system. Semantic CSS vars (bg/surface/border/text, 3 brand accents, status) mapped via `@theme inline` so `data-theme` re-themes at runtime with no rebuild. 16px-min type scale, sharp (0) radii, strong focus ring, reduced-motion + text-size-adjust guards.
+- Fonts: self-hosted **Geist Sans/Mono via the `geist` npm package** — no build-time Google fetch (this is the clean resolution of the Phase-0 `next/font/google` problem; amendment 5). Files ship in the dependency.
+- `src/components/icons/` — hand-rolled 21-glyph icon set (no icon library, plan §2); camera aperture/shutter/lens are the identity.
+- `src/components/ui/` — primitives: Button (4 variants × 3 sizes × states), Field (label/hint/error/mono), Chip (BrandChip + StatusChip), FlagToggle (the core survey interaction), Sheet (bottom sheet: scrim, Escape, scroll-lock), TablePlan (signature survey surface — sections, slots, flag edges, empty-slot state).
+- `src/app/kitchen-sink/page.tsx` — renders every component in every state with a light/dark toggle. Live at `/kitchen-sink` after deploy.
+- `src/lib/cn.ts` — tiny local class joiner (no clsx/tailwind-merge dep).
+
+Verified: typecheck / lint / next build / opennext build all green. **Rendered in-sandbox with Playwright** (Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` — the project's pinned PW wants a newer build, so pass `executablePath`) at 402px phone width — light, dark, and sheet-open screenshots all looked clean and legible; sent to Dean for review.
+
+**Next:** incorporate Dean's design feedback (colors, spacing, type, the hand-rolled glyphs, component states), confirm the real brand-accent hex values with him, then finalize Phase 1 and move to Phase 2 (CMS). `/kitchen-sink` is a dev/review route — decide before public launch whether to keep or gate it (harmless now: no data).
 
 ---
 
