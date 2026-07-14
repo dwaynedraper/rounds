@@ -29,8 +29,9 @@ Companion document: `ROUNDS-PRIMER.md` — the context brief for the implementin
 | 12 | **Rounds freeze the note too** | A round is "what you found on a date" — the note is part of what you found. |
 | 13 | **Region: `us-east-1` everywhere it's configurable (Neon, D1, DO location hints).** | Dean's call (2026-07 override of the original `us-east-2` default): Resend and several other platforms in this stack only offer `us-east-1`, and colocating the DB with them removes a needless cross-region hop on every CMS email + admin write. Cloudflare Workers themselves still execute at whichever edge PoP is nearest each rep, unaffected by this. |
 | 14 | **Auth library: Better Auth, not Auth.js v5** | Discovered mid-Phase-0 (2026-07-13): Auth.js v5 is still beta after 2+ years with no GA date, and the Auth.js project is now organizationally part of Better Auth, which is the maintainers' recommended path for new projects. Dean's call, presented as a real fork per the primer's "don't silently substitute" rule — see Appendix C for the full rationale and verified package details. |
+| 15 | **Survey realignment (2026-07-14, Dean's floor photos + v3 mockup approved).** (a) The floor plan is a **fixed constant**: three tables in fixed order Canon · Nikon · Sony, two looks (oak islands for Canon/Nikon: 2 walls × 2 sections; grey-marble Sony: end + 2 walls × 2 sections). Geometry lives in code (`src/lib/floor.ts`) and its DB rows are seeded identically for every deployment; only **camera assignments** vary per store. (b) **Stores auto-create on entry** — no admin gatekeeping (`POST /api/stores`, rate-limited, audited). (c) **Reps build their store's layout** by assigning master-list products to fixed slots (`POST /api/layout`, master-list-constrained upserts into `store_positions` — hereby promoted from "overrides" to "the store's layout"; `positions.product_id` remains as an optional global default). (d) Slot grids: 4 slots per section default; a 5th camera spreads the grid to 5; empty slots keep their spacing. (e) Survey UI is spatial: overview drawn as square textured slabs with rotated top-down camera SVGs → single table with tappable sides → side view in Dean's v1 format (positions left→right *viewed from the end cap*; camera name + Alarm / No Power / Broken / Missing + inline note) with a **Record ⇄ Edit-layout toggle**. (f) Flag vocabulary seeds as exactly those four. No per-camera brand labels; no accessory/stock tracking (Best Buy Power BI owns that). `sections.key` widens from enum to text (`left-1`, `right-2`, `end-1`, …). | The generic list-style survey deviated from the physical floor. Screens must mirror the tables reps stand at; stores must not need an admin to exist; layouts differ per store, so reps own them. |
 
-Unchanged and reaffirmed: the four-concept data model (catalog / planogram / condition / round), overrides-not-copies store layouts, stable `position_id` keying, CMS before survey, Drizzle + Neon HTTP driver, Zod everywhere, IndexedDB write queue, hand-rolled SVG sprite, no AI, no personal data, no cookies.
+Unchanged and reaffirmed: the four-concept data model (catalog / planogram / condition / round), overrides-not-copies store layouts (now doing double duty as the per-store layout, §1 #15), stable `position_id` keying, CMS before survey, Drizzle + Neon HTTP driver, Zod everywhere, IndexedDB write queue, hand-rolled SVG sprite, no AI, no personal data, no cookies.
 
 ---
 
@@ -163,6 +164,8 @@ Public writes are **route handlers** (a background sync queue can't call server 
 | `/api/stores/[number]/state` | GET | public | tag `store:<n>` | — |
 | `/api/stores/[number]/rounds` | GET | public | tag `rounds:<n>` | — |
 | `/api/conditions` | POST | public | revalidates `store:<n>` | Zod contract B1 · rate limit 30/60s per device, 60/60s per IP · flags validated against `flags` table · store+position must exist · audited |
+| `/api/stores` | POST | public | revalidates `store:<n>` on create | Zod (4-digit number + device hash) · rate limit 10/60s per device, 20/60s per IP · create-once (conflict = no-op) · audited |
+| `/api/layout` | POST | public | revalidates `store:<n>` | Zod contract B3 (≤32 assignments) · rate limit 20/60s per device, 40/60s per IP · store+positions must exist, products must exist **and be active** (master-list constraint) · audited |
 | `/api/rounds` | POST | public | revalidates `rounds:<n>` | Zod contract B2 · rate limit 6/60s per device, 12/60s per IP · `client_key` idempotency · audited |
 | CMS server actions | — | session + role + brand scope re-checked **inside each action** | revalidate the tags they dirty | Zod on every input · audited |
 | `/api/auth/*` | — | Better Auth handlers | — | `disableSignUp: true` allowlist |
@@ -259,16 +262,18 @@ Every phase ends with its **Done when** list fully green. Do not start phase N+1
 
 **Done when:** an editor scoped to Canon cannot see or touch Sony rows (Vitest, not honor system) · a signup attempt from an unknown email is rejected · bulk import round-trips 60 real-shaped rows · every mutation produces an audit row and busts the right tag (integration-tested).
 
-### Phase 3 — The survey (public, loginless) + its armor
+### Phase 3 — The survey (public, loginless) + its armor *(realigned per §1 #15)*
 
-- Store entry (4-digit number) → three tables → plan view → section view → flag/note UI.
+- Store entry (4-digit keypad, no text keyboard) → **auto-creates the store** if new (`POST /api/stores`).
+- Overview: the three fixed tables drawn as square textured slabs (oak ×2, grey marble ×1), camera SVGs on the section grids, flags visible at a glance → tap a table → zoomed single-table view with tappable sides → side view.
+- Side view (Dean's v1 format): positions left→right *viewed from the end cap*; each column = camera name + Alarm / No Power / Broken / Missing + inline note. **Record ⇄ Edit-layout toggle** on the same screen; edit mode assigns master-list products to slots (`POST /api/layout`).
 - Living state: a broken camera stays broken across visits — nobody re-enters yesterday's damage.
-- Reads via the cached GETs (§5); writes via `POST /api/conditions`.
+- Reads via the cached GETs (§5); writes via `POST /api/conditions`, `/api/layout`, `/api/stores`.
 - **S1, S2, S5, S6, S7 ship in this phase, same commits as the endpoints.**
 - Generate output + copy-to-clipboard.
 - Cloudflare Web Analytics snippet.
 
-**Done when:** the two POST endpoints reject: unknown store, unknown position, unknown flag, oversized note/body, stale `captured_at` (409 + current row) · rate limit demonstrably trips (integration test with the binding stubbed) · anonymous writes appear in `audit_log` with `device_hash` · a full table walk works end-to-end on a phone.
+**Done when:** the public POST endpoints reject: unknown store (conditions/layout), unknown position, unknown flag, unknown/inactive product (layout), oversized note/body, stale `captured_at` (409 + current row) · store entry creates-once (re-entry is a no-op) · rate limit demonstrably trips (integration test with the binding stubbed) · anonymous writes appear in `audit_log` with `device_hash` · a full table walk works end-to-end on a phone.
 
 ### Phase 4 — Rounds (snapshots) + history
 

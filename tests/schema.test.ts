@@ -116,7 +116,7 @@ describe('conditions (living state)', () => {
       slug: 'endcap-1', name: 'Endcap 1', layoutKind: 'endcap', surface: 'gray',
     }).returning()
     const [section] = await testDb.insert(sections).values({
-      fixtureId: fixture.id, key: 'endcap', label: 'Endcap',
+      fixtureId: fixture.id, key: 'end-1', label: 'End',
     }).returning()
     const [position] = await testDb.insert(positions).values({
       sectionId: section.id, idx: 0, productId: product.id,
@@ -222,7 +222,7 @@ describe('rounds', () => {
       brandId: brand.id, quickName: 'Q', longName: 'L', model: 'M', sku: '1234567', kind: 'camera',
     }).returning()
     const [section] = await testDb.insert(sections).values({
-      fixtureId: fixture.id, key: 'endcap', label: 'Endcap',
+      fixtureId: fixture.id, key: 'end-1', label: 'End',
     }).returning()
     const [position] = await testDb.insert(positions).values({
       sectionId: section.id, idx: 0, productId: product.id,
@@ -246,7 +246,7 @@ describe('store_positions (per-store overrides, plan §4.2)', () => {
       slug: 'endcap-1', name: 'Endcap 1', layoutKind: 'endcap', surface: 'gray',
     }).returning()
     const [section] = await testDb.insert(sections).values({
-      fixtureId: fixture.id, key: 'endcap', label: 'Endcap',
+      fixtureId: fixture.id, key: 'end-1', label: 'End',
     }).returning()
     const [position] = await testDb.insert(positions).values({
       sectionId: section.id, idx: 0, productId: product.id,

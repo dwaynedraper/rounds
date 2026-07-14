@@ -19,7 +19,6 @@ import { sql } from 'drizzle-orm'
 export const productKind = pgEnum('product_kind', ['camera', 'lens', 'accessory', 'tablet', 'display'])
 export const layoutKind  = pgEnum('layout_kind', ['endcap', 'plain'])
 export const surfaceKind = pgEnum('surface_kind', ['gray', 'wood'])
-export const sectionKey  = pgEnum('section_key', ['endcap', 'right', 'left', 'lens'])
 export const userRole    = pgEnum('user_role', ['admin', 'editor'])
 
 // ── CATALOG ──────────────────────────────────────────────────────────────
@@ -70,13 +69,18 @@ export const fixtureBrands = pgTable('fixture_brands', {
   brandId:   integer('brand_id').notNull().references(() => brands.id),
 }, (t) => [primaryKey({ columns: [t.fixtureId, t.brandId] })])
 
+// key is '<side>-<n>' ('left-1', 'right-2', 'end-1') — the fixed floor
+// geometry (plan §1 #15) lives in src/lib/floor.ts and is seeded 1:1 here.
 export const sections = pgTable('sections', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),
   fixtureId: integer('fixture_id').notNull().references(() => fixtures.id),
-  key:       sectionKey('key').notNull(),
+  key:       text('key').notNull(),
   label:     text('label').notNull(),
   sort:      smallint('sort').notNull().default(0),
-}, (t) => [uniqueIndex('sections_fixture_key_idx').on(t.fixtureId, t.key)])
+}, (t) => [
+  uniqueIndex('sections_fixture_key_idx').on(t.fixtureId, t.key),
+  check('sections_key_format', sql`${t.key} ~ '^[a-z]+-[0-9]$'`),
+])
 
 export const positions = pgTable('positions', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),

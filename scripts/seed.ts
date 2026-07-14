@@ -1,78 +1,143 @@
-// Rounds — seed script. S8 (plan §7): this data must always be FICTIONAL.
-// Real planograms and store numbers live only in the production DB, never
-// in this repo — the repo is public from commit one.
-// Run via `npm run db:seed` (uses tsx --env-file=.env.local — no dotenv needed).
+// Rounds — seed script (realigned, plan §1 #15). Idempotent: safe to re-run.
+//
+// S8 note (plan §7): no REAL Best Buy data may live in this repo. Camera
+// model names are public product knowledge, so the master list below is
+// fine to seed — but the SKUs are placeholders (99900xx), and per-store
+// layouts (which camera sits where in which store) are created by reps in
+// production only, never here.
+//
+// Run via `npm run db:seed`.
 import { randomUUID } from 'crypto'
-import { db } from '../src/db'
+import { and, eq } from 'drizzle-orm'
+import { drizzle as drizzleNeon } from 'drizzle-orm/neon-http'
+import { drizzle as drizzleNodePg, type NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { Pool } from 'pg'
 import {
   brands, products, fixtures, fixtureBrands, sections, positions,
   stores, flags,
 } from '../src/db/schema'
 import { user } from '../src/db/auth-schema'
+import * as schema from '../src/db/schema'
+import * as authSchema from '../src/db/auth-schema'
+import { FLOOR, FLAG_VOCAB } from '../src/lib/floor'
 
-// The email that becomes the first admin (S3 allowlist — only seeded/invited
-// emails can ever log in). Override with ADMIN_EMAIL when running the seed.
+// The app runtime is Neon-HTTP only (plan §2), but that driver cannot reach
+// a local Postgres — so this dev-only script picks by URL: localhost gets
+// node-postgres (also lets CI verify the seed), anything else gets Neon.
+const fullSchema = { ...schema, ...authSchema }
+type SeedDb = NodePgDatabase<typeof fullSchema>
+function makeDb(): SeedDb {
+  const url = process.env.DATABASE_URL
+  if (!url) throw new Error('DATABASE_URL is not set')
+  if (/localhost|127\.0\.0\.1/.test(url)) {
+    return drizzleNodePg(new Pool({ connectionString: url }), { schema: fullSchema })
+  }
+  // Structurally identical query API; cast keeps one code path below.
+  return drizzleNeon(url, { schema: fullSchema }) as unknown as SeedDb
+}
+const db = makeDb()
+
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? 'dean@sharpsightedstudio.com').toLowerCase()
 
+// Starter master list — Dean refines this in the CMS (products page).
+// quickName is what reps see on the survey; keep them short.
+const MASTER_LIST: Record<'canon' | 'nikon' | 'sony', string[]> = {
+  canon: [
+    'EOS R100', 'EOS R50', 'EOS R10', 'EOS R8', 'EOS R7',
+    'EOS R6 II', 'EOS R5', 'Rebel T7', 'PowerShot V10', 'VIXIA HF G70',
+  ],
+  nikon: [
+    'Z30', 'Z50', 'Zfc', 'Zf', 'Z5', 'Z6 III', 'Z7 II', 'Z8', 'Coolpix P1000',
+  ],
+  sony: [
+    'A1', 'A9 III', 'A7R V', 'A7 V', 'A7 IV', 'A7C II', 'A7CR',
+    'A6700', 'A6400', 'A6100', 'ZV-E10 II', 'ZV-1 II', 'ZV-E1',
+    'FX30', 'RX100 VII',
+  ],
+}
+
 async function main() {
-  console.log('Seeding fictional demo data...')
+  console.log('Seeding fixed floor + starter master list (idempotent)...')
 
-  const [sony, canon, nikon] = await db.insert(brands).values([
-    { slug: 'sony', name: 'Sony', accent: '#ff6f00', sort: 1 },
-    { slug: 'canon', name: 'Canon', accent: '#c8102e', sort: 2 },
-    { slug: 'nikon', name: 'Nikon', accent: '#ffe100', sort: 3 },
-  ]).returning()
+  // ── brands ──
+  await db.insert(brands).values([
+    { slug: 'canon', name: 'Canon', accent: '#c8102e', sort: 1 },
+    { slug: 'nikon', name: 'Nikon', accent: '#ffe100', sort: 2 },
+    { slug: 'sony', name: 'Sony', accent: '#ff6f00', sort: 3 },
+  ]).onConflictDoNothing()
+  const brandRows = await db.select().from(brands)
+  const brandBySlug = new Map(brandRows.map((b) => [b.slug, b]))
 
-  await db.insert(flags).values([
-    { key: 'broken', label: 'Broken / not powering on', sort: 1 },
-    { key: 'missing', label: 'Missing from fixture', sort: 2 },
-    { key: 'demo-mode-off', label: 'Demo mode not active', sort: 3 },
-    { key: 'wrong-lens', label: 'Wrong lens attached', sort: 4 },
-    { key: 'cosmetic', label: 'Cosmetic damage', sort: 5 },
-  ])
+  // ── flags: exactly the four (plan §1 #15f) ──
+  for (const f of FLAG_VOCAB) {
+    await db.insert(flags).values({ ...f, active: true })
+      .onConflictDoUpdate({ target: flags.key, set: { label: f.label, sort: f.sort, active: true } })
+  }
 
-  const demoProducts = await db.insert(products).values([
-    { brandId: sony.id, quickName: 'Demo Alpha 7', longName: 'Sample Alpha 7 Demo Unit', model: 'DEMO-A7', sku: '9990001', kind: 'camera' },
-    { brandId: sony.id, quickName: 'Demo 24-70 Lens', longName: 'Sample 24-70mm f/2.8 Lens', model: 'DEMO-2470', sku: '9990002', kind: 'lens' },
-    { brandId: canon.id, quickName: 'Demo EOS R', longName: 'Sample EOS R Demo Unit', model: 'DEMO-EOSR', sku: '9990003', kind: 'camera' },
-    { brandId: nikon.id, quickName: 'Demo Z6', longName: 'Sample Z6 Demo Unit', model: 'DEMO-Z6', sku: '9990004', kind: 'camera' },
-  ]).returning()
+  // ── master list (placeholder SKUs; CMS owns this from here) ──
+  let skuCounter = 9900001
+  for (const [slug, names] of Object.entries(MASTER_LIST)) {
+    const brand = brandBySlug.get(slug)
+    if (!brand) throw new Error(`brand ${slug} missing`)
+    for (const quickName of names) {
+      await db.insert(products).values({
+        brandId: brand.id,
+        quickName,
+        longName: `${brand.name} ${quickName}`,
+        model: quickName.replace(/\s+/g, '-').toUpperCase(),
+        sku: String(skuCounter++),
+        kind: 'camera',
+      }).onConflictDoNothing() // sku unique — re-runs are no-ops
+    }
+  }
 
-  const [fixture] = await db.insert(fixtures).values([
-    { slug: 'demo-endcap', name: 'Demo Endcap', layoutKind: 'endcap', surface: 'gray' },
-  ]).returning()
+  // ── fixed floor geometry, 1:1 from src/lib/floor.ts ──
+  for (const table of FLOOR) {
+    let [fixture] = await db.select().from(fixtures).where(eq(fixtures.slug, table.slug))
+    if (!fixture) {
+      ;[fixture] = await db.insert(fixtures).values({
+        slug: table.slug,
+        name: table.name,
+        layoutKind: table.layoutKind,
+        surface: table.surface === 'wood' ? 'wood' : 'gray',
+      }).returning()
+      const brand = brandBySlug.get(table.brandSlug)
+      if (brand) await db.insert(fixtureBrands).values({ fixtureId: fixture.id, brandId: brand.id }).onConflictDoNothing()
+    }
 
-  await db.insert(fixtureBrands).values([
-    { fixtureId: fixture.id, brandId: sony.id },
-    { fixtureId: fixture.id, brandId: canon.id },
-    { fixtureId: fixture.id, brandId: nikon.id },
-  ])
+    let sort = 0
+    for (const side of table.sides) {
+      for (const sec of side.sections) {
+        sort += 1
+        let [row] = await db.select().from(sections)
+          .where(and(eq(sections.fixtureId, fixture.id), eq(sections.key, sec.key)))
+        if (!row) {
+          ;[row] = await db.insert(sections).values({
+            fixtureId: fixture.id, key: sec.key, label: sec.label, sort,
+          }).returning()
+          // capacity slots, idx 0..capacity-1, all planned-empty: reps assign
+          // cameras per store (store_positions), never here.
+          await db.insert(positions).values(
+            Array.from({ length: sec.capacity }, (_, idx) => ({ sectionId: row.id, idx, productId: null })),
+          )
+        }
+      }
+    }
+  }
 
-  const demoSections = await db.insert(sections).values([
-    { fixtureId: fixture.id, key: 'endcap', label: 'Endcap', sort: 1 },
-    { fixtureId: fixture.id, key: 'lens', label: 'Lens Wall', sort: 2 },
-  ]).returning()
-
-  await db.insert(positions).values([
-    { sectionId: demoSections[0].id, idx: 0, productId: demoProducts[0].id },
-    { sectionId: demoSections[0].id, idx: 1, productId: demoProducts[2].id },
-    { sectionId: demoSections[0].id, idx: 2, productId: demoProducts[3].id },
-    { sectionId: demoSections[0].id, idx: 3, productId: null }, // planned-empty slot
-    { sectionId: demoSections[1].id, idx: 0, productId: demoProducts[1].id },
-  ])
-
+  // ── demo stores (fictional numbers) ──
   await db.insert(stores).values([
     { number: '0001', nickname: 'Demo Store A' },
     { number: '0002', nickname: 'Demo Store B' },
-  ])
+  ]).onConflictDoNothing()
 
-  // First admin (CMS login allowlist, S3). Idempotent so re-seeding is safe.
-  await db
-    .insert(user)
+  // ── first admin (S3 allowlist) ──
+  await db.insert(user)
     .values({ id: randomUUID(), email: ADMIN_EMAIL, name: 'Admin', emailVerified: true, role: 'admin' })
     .onConflictDoNothing()
 
-  console.log(`Seed complete: 3 brands, 5 flags, 4 fictional products, 1 fixture, 5 positions, 2 demo stores, admin ${ADMIN_EMAIL}.`)
+  const positionCount = await db.select().from(positions).then((r) => r.length)
+  console.log(`Seed complete: 3 brands, ${FLAG_VOCAB.length} flags, master list seeded, 3 fixtures, ${positionCount} positions, admin ${ADMIN_EMAIL}.`)
   process.exit(0)
 }
 

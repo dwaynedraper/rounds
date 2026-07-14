@@ -4,6 +4,29 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-14 — Survey realignment (plan §1 #15) — 🚧 built + verified in sandbox, needs Dean's migrate + seed
+
+**What changed and why:** Dean's floor photos showed the built survey didn't match the physical tables. Realigned (v3 mockup approved by Dean): the floor plan is a FIXED constant — Canon · Nikon · Sony, two looks — and only camera assignments vary per store. Stores auto-create on entry. Reps build their store's layout from the admin-owned master list. Full decision record: plan §1 amendment #15.
+
+Built:
+- `src/lib/floor.ts` — the fixed geometry constant (oak: 2 walls × 2 sections × 5-cap; Sony: end(4) + 2 walls × 2 sections × 5-cap). Seeded 1:1 by the rewritten idempotent `scripts/seed.ts` (driver-aware: node-postgres for localhost so it's verifiable in CI/sandbox, neon-http otherwise). Flags now exactly: alarm / no-power / broken / missing.
+- Migration `0002` — `sections.key` enum→text (`left-1`…), wipes the old fictional demo planogram data so it applies cleanly on Neon (stores + users kept).
+- `POST /api/stores` (enter → auto-create, create-once, audited) and `POST /api/layout` (contract B3; master-list-constrained — products must exist AND be active; upserts `store_positions`, which is now the per-store layout, not just overrides). Both S1/S2/S5/S10-armored like `/api/conditions`, which is UNCHANGED (conditions still key store+position, so LWW/audit/tests all carried over).
+- Survey UI rebuilt: `/` keypad entry (no OS keyboard) → `/store/[n]` overview (3 slabs, flags visible) → `/store/[n]/[brand]` single table w/ tappable sides → `/store/[n]/[brand]/[side]` side view — Dean's v1 format (columns of camera name + 4 flag buttons + inline note) with the Record ⇄ Edit-layout toggle (edit = amber header + master-list picker sheet). `TableSlab` is the config→grid renderer from the approved mockup; slab demos added to `/kitchen-sink`. Old `TablePlan`/`SurveyClient` deleted.
+- Tests: +6 (`tests/layout.test.ts`) — ensureStore create/no-op+audit, layout assign/upsert/clear, unknown store/position/product, INACTIVE product rejected, last-in-request wins. 29/29 green.
+
+Verified in sandbox: typecheck / lint / 29 tests / `next build` / `opennextjs-cloudflare build` (zero env vars) / seed run twice against local Postgres (64 positions: 20+20+24, idempotent) / Playwright screenshots of the slab renderer + keypad match the approved v3 mockup.
+
+### ⚠️ Dean's handoff — in order
+1. Apply the bundle, push.
+2. `npm run db:migrate` (applies `0002` — **wipes old demo planogram/conditions on Neon**, keeps stores + your admin user).
+3. `npm run db:seed` (now safe AND required — re-runnable; seeds the fixed floor, 4 flags, starter master list of ~35 real camera names w/ placeholder SKUs).
+4. Walk a store on your phone: enter a number → tables → side → flag something → edit layout → assign cameras from the master list.
+
+Known follow-ups: admin planogram editor still edits the global defaults (works, but its labels predate the realignment); `docs/ROUNDS-PRIMER.md` not yet updated for #15; Phase 4 (rounds) untouched by design — round submission still references positions, unaffected.
+
+---
+
 ## 2026-07-14 — Phases 2 (CMS) & 3 (survey) — 🚧 built + verified in sandbox, awaiting Dean's infra steps
 
 **Status: both phases built, everything that can be verified in the sandbox is green** (typecheck / lint / 22 tests / next build / opennext build). The full app can't RUN in the sandbox (the `neon-http` driver is Neon-only), so the risky logic was verified directly against local Postgres instead: the Better Auth schema + S3 allowlist (Phase 2) and the condition write path — S1 existence checks, S6 last-write-wins, S5 audit (Phase 3, 4 dedicated tests). End-to-end flows (login email, live survey) are verified by Dean after the infra steps below.
