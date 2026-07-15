@@ -4,6 +4,29 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-14 — Live incident #2: Worker deadlock (error 1101) on shell revalidation — ✅ fixed (caching stack, KV backend)
+
+**Symptom (Dean, live):** after the stream-corruption fix deployed, the survey pages threw **error 1101 "Worker threw exception"** intermittently. Cloudflare logs: `waitUntil() tasks did not complete within the allowed time` (warn) → `The Workers runtime canceled this request because it detected that your Worker's code had hung and would never generate a response` (error).
+
+**Root cause:** the app deployed with the Phase 0–3 **minimal** OpenNext config (no caching stack). The static survey shells carry a 5-minute stale-time; when one expires, Next schedules a background ISR revalidation via `waitUntil`. With no revalidation **queue** binding, that task hangs forever → runtime kills the request. NOT the earlier stream bug — a separate, deeper problem the minimal config was always going to hit once shells started expiring under real traffic. (My earlier WORKLOG note calling the caching stack "optional / can wait until traffic grows" was **wrong** — it's load-bearing for correctness, not efficiency. Owning that.)
+
+**Fix:** enabled the OpenNext caching stack (plan Appendix D), with one deliberate change from the locked plan — **KV instead of R2** for the incremental cache (plan §1 #16): R2 needs a card on file even free, which breaks "free to host"; KV is card-free on the Workers Free plan and the queue (the actual fix) is backend-agnostic. Final stack: `kvIncrementalCache` + `d1NextTagCache` + `doQueue` in `open-next.config.ts`; `kv_namespaces` + `d1_databases` + `durable_objects` + `WORKER_SELF_REFERENCE` service + DO `migrations` in `wrangler.jsonc`. `cf:deploy`/`cf:preview` npm scripts switched from bare `wrangler` to `opennextjs-cloudflare deploy`/`preview` so `populate-cache` runs (creates the D1 `revalidations` table + seeds the cache).
+
+**Verified in-sandbox (local Workers runtime, real build):** primed all 3 survey routes → waited out the full 300s stale window → 9 post-stale requests served in ~10–15 ms with **zero** `did-not-complete`/hang signatures and active queue+cache log activity. Ran this twice — once on R2, once on the final KV config — both clean. typecheck ✓, 29 tests ✓, next build ✓, opennext build ✓, eslint(src) ✓. (`npm run lint` bare-invocation V8-aborts in the degraded container after many builds; eslint on `src/` is clean — env quirk, not a code issue.)
+
+### ⚠️ Dean's handoff — provision two card-free resources, then deploy
+1. Apply the bundle, merge to develop. **Do not push yet** — wrangler.jsonc has `REPLACE_WITH_*` id placeholders; pushing first would fail the auto-deploy.
+2. Create the two resources (Workers Free plan, no payment method):
+   - `npx wrangler kv namespace create rounds-inc-cache` → copy the `id`
+   - `npx wrangler d1 create rounds-tags` → copy the `database_id`
+3. Paste both ids into `wrangler.jsonc` (`NEXT_INC_CACHE_KV.id` and `NEXT_TAG_CACHE_D1.database_id`). These are NOT secrets — they're fine in the public repo.
+4. Commit + push. Workers Builds must deploy via `opennextjs-cloudflare deploy` (already wired in `cf:deploy`); confirm the Workers Builds deploy command is `npm run cf:deploy` (or `npx opennextjs-cloudflare deploy`), NOT `wrangler deploy` — a bare wrangler deploy skips populate-cache and starts the stack cold.
+5. After deploy: load `/store/0001`, wait 6 minutes, reload — must stay fast (no 1101). That's the exact failure this fixes.
+
+Residual: the CMS still server-streams (auth-gated, 5 users) — same stream-corruption *and* hang classes could theoretically touch it; low priority, same fixes apply. Upstream: consider filing the PPR interleaving bug at opennextjs-cloudflare.
+
+---
+
 ## 2026-07-14 — Live incident: PPR resume-stream corruption on Workers — ✅ fixed (survey moved to client-fetch)
 
 **Symptom (Dean, live):** raw React flight payload rendered as visible garbled text over the survey pages. **Diagnosis (verified in Dean's Chrome + curl):** the deployed HTML is malformed — the `@opennextjs/cloudflare` adapter (1.20.1, latest; PPR is on its supported list, so this is an adapter bug) interleaves a chunk into the middle of an inline flight `<script>` during the PPR two-phase (shell + resume) response on dynamic-param routes. Script never terminates → browser SyntaxError → "Connection closed" → payload tail parses as body text. Deterministic; triggered by the realignment's larger streamed payload (old deploy's fit one chunk).
