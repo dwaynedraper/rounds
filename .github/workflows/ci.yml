@@ -36,7 +36,7 @@ jobs:
       BETTER_AUTH_SECRET: ci-build-placeholder-secret-min-32-chars-xxxx
       BETTER_AUTH_URL: http://localhost:3000
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v5
         with:
