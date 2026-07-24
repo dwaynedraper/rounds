@@ -1,11 +1,26 @@
 version: 2
 updates:
+  # npm dependencies — ONE grouped PR, monthly, minor+patch only.
+  # Major bumps (the build-breakers) are intentionally skipped: do those
+  # deliberately by hand when you're ready, not on Dependabot's schedule.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions — one grouped PR, monthly.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
