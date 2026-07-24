@@ -26,27 +26,36 @@
   //    absent (local dev), so the code works with or without it.
   "ratelimits": [
     { "name": "RL_CONDITIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }
+  ],
+
+  // ── Caching stack (plan Appendix D, backend per §1 #16) — REQUIRED, not
+  //    optional: without the DO queue the Worker deadlocks on shell
+  //    revalidation (WORKLOG 2026-07-14). Must stay in lockstep with
+  //    open-next.config.ts. All three resources are Workers-Free-plan,
+  //    NO payment method required (that's why KV, not R2 — see §1 #16).
+  //
+  //    Dean provisions two resources once, then fills the ids below:
+  //      wrangler kv namespace create rounds-inc-cache   → NEXT_INC_CACHE_KV id
+  //      wrangler d1 create rounds-tags                  → NEXT_TAG_CACHE_D1 id
+  //    The DO queue + WORKER_SELF_REFERENCE need no dashboard resource.
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "rounds" }
+  ],
+  "kv_namespaces": [
+    { "binding": "NEXT_INC_CACHE_KV", "id": "d2f25d8287f1411f9a945b257f3f8f24" }
+  ],
+  "d1_databases": [
+    { "binding": "NEXT_TAG_CACHE_D1", "database_name": "rounds-tags", "database_id": "668c1c9d-9017-4b34-aa05-a828cfa8a840" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }
   ]
 
-  // ── PHASE 3 caching stack (do not enable piecemeal — see note above) ──
-  //
-  // "services": [
-  //   { "binding": "WORKER_SELF_REFERENCE", "service": "rounds" }
-  // ],
-  // "r2_buckets": [
-  //   { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "rounds-cache" }
-  // ],
-  // "d1_databases": [
-  //   { "binding": "NEXT_TAG_CACHE_D1", "database_name": "rounds-tags", "database_id": "<CREATE_AND_FILL>" }
-  // ],
-  // "durable_objects": {
-  //   "bindings": [
-  //     { "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }
-  //   ]
-  // },
-  // "migrations": [
-  //   { "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }
-  // ],
   //
   // ── Phase 4 adds RL_ROUNDS here (rounds submit endpoint) ──
   // { "name": "RL_ROUNDS", "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } }

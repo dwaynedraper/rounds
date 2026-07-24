@@ -31,6 +31,8 @@ Companion document: `ROUNDS-PRIMER.md` — the context brief for the implementin
 | 14 | **Auth library: Better Auth, not Auth.js v5** | Discovered mid-Phase-0 (2026-07-13): Auth.js v5 is still beta after 2+ years with no GA date, and the Auth.js project is now organizationally part of Better Auth, which is the maintainers' recommended path for new projects. Dean's call, presented as a real fork per the primer's "don't silently substitute" rule — see Appendix C for the full rationale and verified package details. |
 | 15 | **Survey realignment (2026-07-14, Dean's floor photos + v3 mockup approved).** (a) The floor plan is a **fixed constant**: three tables in fixed order Canon · Nikon · Sony, two looks (oak islands for Canon/Nikon: 2 walls × 2 sections; grey-marble Sony: end + 2 walls × 2 sections). Geometry lives in code (`src/lib/floor.ts`) and its DB rows are seeded identically for every deployment; only **camera assignments** vary per store. (b) **Stores auto-create on entry** — no admin gatekeeping (`POST /api/stores`, rate-limited, audited). (c) **Reps build their store's layout** by assigning master-list products to fixed slots (`POST /api/layout`, master-list-constrained upserts into `store_positions` — hereby promoted from "overrides" to "the store's layout"; `positions.product_id` remains as an optional global default). (d) Slot grids: 4 slots per section default; a 5th camera spreads the grid to 5; empty slots keep their spacing. (e) Survey UI is spatial: overview drawn as square textured slabs with rotated top-down camera SVGs → single table with tappable sides → side view in Dean's v1 format (positions left→right *viewed from the end cap*; camera name + Alarm / No Power / Broken / Missing + inline note) with a **Record ⇄ Edit-layout toggle**. (f) Flag vocabulary seeds as exactly those four. No per-camera brand labels; no accessory/stock tracking (Best Buy Power BI owns that). `sections.key` widens from enum to text (`left-1`, `right-2`, `end-1`, …). | The generic list-style survey deviated from the physical floor. Screens must mirror the tables reps stand at; stores must not need an admin to exist; layouts differ per store, so reps own them. |
 
+| 16 | **Incremental cache backend: Workers KV, not R2 (2026-07-14, overrides Appendix D's R2 pick).** The OpenNext caching stack is REQUIRED for correctness, not just efficiency: deployed without it the Worker **deadlocked** on prerendered-shell revalidation (stale shells trigger a background `waitUntil` revalidation that hangs forever with no queue → runtime kills the request → error 1101). The Durable-Object revalidation **queue** is the actual fix; the incremental cache is just where rendered shells/data live. Appendix D specced **R2** for that store and called it "free tier," but R2 requires **linking a payment method** to the Cloudflare account even within free limits — which breaks "free to host," especially for anyone self-deploying this open-source repo. KV is part of the Workers Free plan (no card), and its limits (100k reads/day, 1k writes/day) are ample for ~1,000 low-frequency reps once OpenNext's in-region cache absorbs repeat reads. Tag cache stays **D1** and the queue stays a **Durable Object** — both free, no card. Verified: with KV + D1 + DO the post-stale-window requests serve in ~15 ms with zero hangs (WORKLOG 2026-07-14, hang incident). Flipping back to R2 is a 3-line change in `open-next.config.ts` + the `r2_buckets` block. R2 re-enters only at Phase 5, for the archival valve (§8), where linking a card is a smaller, later ask. | R2's card requirement conflicts with the free-to-host goal; the queue (the real fix) is backend-agnostic, so KV costs nothing in correctness and keeps the zero-card promise. |
+
 Unchanged and reaffirmed: the four-concept data model (catalog / planogram / condition / round), overrides-not-copies store layouts (now doing double duty as the per-store layout, §1 #15), stable `position_id` keying, CMS before survey, Drizzle + Neon HTTP driver, Zod everywhere, IndexedDB write queue, hand-rolled SVG sprite, no AI, no personal data, no cookies.
 
 ---
@@ -217,7 +219,8 @@ Numbered so phases can reference them. S1–S6 ship **in Phase 3 with the endpoi
 | Neon egress | 5 GB/mo, **compute suspends if exceeded** | < 1 GB (cache misses + writes) | OK — same caveat |
 | Durable Objects (free = SQLite-backed) | 100k req/day | revalidation queue traffic, tiny | OK |
 | D1 (tag cache) | 5M reads/day, 100k writes/day | ≤ 1 read/request | OK |
-| R2 | 10 GB | incremental cache + round archives | Years of headroom |
+| KV (incremental cache — §1 #16) | 100k reads/day, 1k writes/day, 1 GB | in-region cache absorbs repeat reads; writes only on rep edits | OK — no card required |
+| R2 (Phase 5 archival only — §1 #16) | 10 GB | round/audit archives, ≥12 mo old | Years of headroom; card linked at Phase 5 |
 | Resend | 100 emails/day | ~10 magic links/week | OK |
 
 **Growth valve** (Phase 5): a monthly Cron Trigger exports rounds + audit rows older than 12 months to R2 as JSONL and prunes them from Postgres. Steady-state hot set stays under half the Neon quota indefinitely. The valve is code from day one, so scale never becomes a migration.
@@ -634,13 +637,15 @@ S4 still applies exactly as originally specified: middleware is not the security
 
 ## Appendix D · Cloudflare / OpenNext configuration
 
-Caching on the adapter needs three components (verified against OpenNext docs, 2026-07); all free-tier:
+Caching on the adapter needs three components (verified against the installed adapter, 2026-07); all Workers-Free-plan, **no payment method** (see §1 #16 — this is why KV, not R2):
 
 | Component | Binding | Free tier |
 |---|---|---|
-| Incremental cache (rendered pages/data) | **R2 bucket** | 10 GB |
-| Tag cache (`revalidateTag`) | **D1 database** (`D1NextModeTagCache`) | 5M reads/day |
-| Revalidation queue | **Durable Object** (SQLite-backed — required on free plan) | 100k req/day |
+| Incremental cache (rendered pages/data) | **KV namespace** `NEXT_INC_CACHE_KV` (§1 #16) | 100k reads/day, 1k writes/day, 1 GB |
+| Tag cache (`revalidateTag`) | **D1 database** `NEXT_TAG_CACHE_D1` (`D1NextModeTagCache`) | 5M reads/day |
+| Revalidation queue **(the deadlock fix)** | **Durable Object** `NEXT_CACHE_DO_QUEUE` (SQLite-backed — required on free plan) | 100k req/day |
+
+The queue is load-bearing: without it, stale-shell revalidation hangs the Worker (error 1101). Deploy via `opennextjs-cloudflare deploy` (NOT bare `wrangler deploy`) so `populate-cache` creates the D1 `revalidations` table and seeds the cache first.
 
 `wrangler.jsonc` sketch (agent fills in real ids; exact shape from current OpenNext docs):
 
@@ -648,9 +653,11 @@ Caching on the adapter needs three components (verified against OpenNext docs, 2
 {
   "name": "rounds",
   "compatibility_flags": ["nodejs_compat"],
-  "r2_buckets":  [{ "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "rounds-cache" }],
-  "d1_databases": [{ "binding": "NEXT_TAG_CACHE_D1", "database_name": "rounds-tags" }],
-  // + DO queue binding per OpenNext docs
+  "kv_namespaces": [{ "binding": "NEXT_INC_CACHE_KV", "id": "<from: wrangler kv namespace create>" }],   // §1 #16 (KV, not R2)
+  "d1_databases": [{ "binding": "NEXT_TAG_CACHE_D1", "database_name": "rounds-tags", "database_id": "<from: wrangler d1 create>" }],
+  "durable_objects": { "bindings": [{ "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }],
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "rounds" }],
   "ratelimits": [
     { "name": "RL_CONDITIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
     { "name": "RL_ROUNDS",     "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } }
