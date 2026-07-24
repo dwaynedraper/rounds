@@ -7,11 +7,27 @@ import {
 } from "@/db/schema";
 import { CATALOG, storeTag } from "@/lib/cache-tags";
 
-/* Phase 3 — the public survey reads. These are `use cache`d and tagged, so
- * the survey serves from the CDN/data cache and the DB is only touched on a
- * cache miss (i.e. right after a CMS edit or a condition write busts the
- * tag). This is the load-bearing rule from plan §3 that keeps Neon inside
- * its free limits. */
+/* Phase 3 — the public survey reads. These are cached and tagged, so the
+ * survey serves from the runtime cache and the DB is only touched on a cache
+ * miss (i.e. right after a CMS edit or a condition write busts the tag).
+ * This is the load-bearing rule from plan §3 that keeps Neon inside its free
+ * limits.
+ *
+ * WHY `use cache: remote` AND NOT `use cache` (plan §1 #17):
+ * Verified against the installed Next 16.2.10 docs
+ * (node_modules/next/dist/docs/01-app/03-api-reference/01-directives/) and
+ * Vercel's runtime-cache docs — plain `use cache` is an IN-MEMORY LRU,
+ * private to one server instance and lost when that instance shuts down.
+ * On Cloudflare that was invisible because the OpenNext kvIncrementalCache
+ * override made the default handler durable (KV). On Vercel there is no such
+ * override: every cold function instance would be a cache miss, i.e. a real
+ * Neon query, and `revalidateTag` would only bust the single instance that
+ * handled the write — so a flag saved on one rep's phone would not show up
+ * on another's. `use cache: remote` stores entries in Vercel's Runtime
+ * Cache, which is shared across instances and honours cacheTag /
+ * revalidateTag. Both properties are required by plan §3; neither is
+ * optional. Self-hosters wire their own remote handler via the
+ * `cacheHandlers` config (see SETUP.md). */
 
 export type CatalogProduct = {
   id: number;
@@ -32,7 +48,7 @@ export type CatalogFixture = {
 };
 
 export async function getCatalog() {
-  "use cache";
+  "use cache: remote";
   cacheTag(CATALOG);
 
   const [productRows, fixtureRows, sectionRows, positionRows, flagRows] =
@@ -78,7 +94,7 @@ export type StoreCondition = {
 };
 
 export async function getStoreState(number: string) {
-  "use cache";
+  "use cache: remote";
   cacheTag(storeTag(number));
 
   const [store] = await db.select().from(stores).where(eq(stores.number, number)).limit(1);

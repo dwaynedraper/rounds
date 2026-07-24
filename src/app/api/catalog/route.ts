@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { getCatalog } from "@/lib/reads";
 
 /* GET /api/catalog (plan §5) — the full catalog + fixed-floor geometry +
- * flag vocabulary in one document. Backed by the `use cache` read
+ * flag vocabulary in one document. Backed by the `use cache: remote` read
  * (tag: catalog), so the DB is only touched on a cache miss. One fetch per
  * screen, never one per section.
  *
