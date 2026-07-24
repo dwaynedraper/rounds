@@ -12,7 +12,7 @@ Full design, data model, security spec, and build order: [`docs/ROUNDS-PLAN.md`]
 
 ## Stack
 
-Next.js 16 (App Router, TS strict) · Postgres on Neon (`neon-http` driver) · Drizzle ORM · Better Auth (CMS login only — the survey itself is loginless) · Tailwind v4 · Zod · IndexedDB write queue · Cloudflare Workers via OpenNext.
+Next.js 16 (App Router, TS strict) · Postgres on Neon (`neon-http` driver) · Drizzle ORM · Better Auth (CMS login only — the survey itself is loginless) · Tailwind v4 · Zod · IndexedDB write queue · Upstash Redis (rate limiting) · deployed on Vercel.
 
 ## Local development
 

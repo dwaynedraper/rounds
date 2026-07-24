@@ -22,7 +22,7 @@ Dean is a Sony camera rep at Best Buy and the product owner. He is also a Next.j
 ## Hard rules
 
 1. **Work the phases in order (plan §9). A phase is done when its "Done when" list is fully green — verified, not assumed.** Do not start the next phase with the current one red.
-2. **Next.js 16 post-dates your training data.** APIs, conventions, and file structure may differ from what you remember. Read the relevant guide in `node_modules/next/dist/docs/` before writing framework code, every time you touch an unfamiliar API. Same caution for Tailwind v4, Better Auth, Zod 4, and `@opennextjs/cloudflare` — verify against installed docs, not memory. (Confirmed 2026-07-13: Next 16's real caching API is `cacheComponents: true` in `next.config.ts` — already enabled — plus `'use cache'`/`cacheTag()`/`cacheLife()`; this replaced the old `experimental.dynamicIO`/`experimental.useCache` flags from your training data.)
+2. **Next.js 16 post-dates your training data.** APIs, conventions, and file structure may differ from what you remember. Read the relevant guide in `node_modules/next/dist/docs/` before writing framework code, every time you touch an unfamiliar API. Same caution for Tailwind v4, Better Auth, Zod 4, and `@upstash/ratelimit` — verify against installed docs, not memory. (Confirmed 2026-07-13: Next 16's real caching API is `cacheComponents: true` in `next.config.ts` — already enabled — plus `'use cache'`/`cacheTag()`/`cacheLife()`; this replaced the old `experimental.dynamicIO`/`experimental.useCache` flags from your training data. Confirmed 2026-07-24: `'use cache'` is a **per-instance in-memory** cache; the app therefore uses **`'use cache: remote'`** in `src/lib/reads.ts`, which is what actually satisfies plan §3 on Vercel — see §1 #17c.)
 3. **TypeScript `strict`, zero `any`, lint-clean.** CI must stay green on `main`.
 4. **No new dependencies** beyond the plan's stack without asking Dean with a one-line justification.
 5. **Security items S1–S10 (plan §7) are requirements, not suggestions.** S1/S2/S5/S6/S7 ship in the same commits as the public endpoints they protect.
@@ -41,6 +41,6 @@ Dean is a Sony camera rep at Best Buy and the product owner. He is also a Next.j
 
 ## First session (Phase 0)
 
-Confirm with Dean that the human setup checklist (plan §11 — GitHub repo, Neon, Cloudflare, Resend) is complete, then scaffold per plan §9 Phase 0. Copy `ROUNDS-PLAN.md` and this primer into `docs/`, and create the repo's `CLAUDE.md` containing: a pointer to both docs, the Next-16-postdates-training warning from Hard Rule 2, and the session-start checklist above.
+Confirm with Dean that the human setup checklist (plan §11 — GitHub repo, Neon, Vercel, Upstash, Resend) is complete, then scaffold per plan §9 Phase 0. Copy `ROUNDS-PLAN.md` and this primer into `docs/`, and create the repo's `CLAUDE.md` containing: a pointer to both docs, the Next-16-postdates-training warning from Hard Rule 2, and the session-start checklist above.
 
 *Primer written 2026-07-13 by the project-director session (Fable). Questions about why a decision was made: plan §1 has the rationale table; if it isn't there, ask Dean.*

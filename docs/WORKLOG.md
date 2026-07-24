@@ -4,6 +4,56 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-24 — Migrated off Cloudflare to Vercel-native (plan §1 #17) — 🚧 built + verified in sandbox, needs Dean's Vercel/Upstash setup
+
+**Why:** every hard production bug this project hit was Cloudflare-adapter-specific (both 2026-07-14 incidents below). Dean owns Vercel Pro and works in it daily. On Vercel, PPR / `use cache` / `revalidateTag` / ISR are first-party, so neither incident can recur, and the entire OpenNext caching stack is **deleted, not reconfigured**. Full decision record: plan §1 amendment #17, which supersedes #1, #9 and #16 and rewrote Appendix D.
+
+### Two corrections to the migration handoff doc, found before writing any code
+
+1. **PR #13 was already merged.** `main` is at `5343be1 Merge pull request #13 from dwaynedraper/develop`; `develop` was 2 commits *behind* `main`, not ahead. The handoff's "close PR #13 without merging" was stale. This branch is cut from `main`.
+2. **"Caching should mostly just work" was wrong, and it was the load-bearing item.** Verified against the installed Next 16.2.10 docs (`node_modules/next/dist/docs/01-app/03-api-reference/01-directives/use-cache.md`, `use-cache-remote.md`) and Vercel's runtime-cache docs: plain **`use cache` is a per-instance in-memory LRU**. On Cloudflare that was invisible because the OpenNext `kvIncrementalCache` override made the default handler durable (KV). On Vercel there is no such override, so `reads.ts` as written would have broken plan §3 in two ways at once — every cold function instance becomes a real Neon query (§8's egress limit **suspends the database** when exceeded), and `revalidateTag` would bust only the instance that handled the write, so a flag saved on one rep's phone would not appear on another's. Fixed by moving both reads to **`'use cache: remote'`**, which uses Vercel's Runtime Cache: shared across instances, honours `cacheTag`/`revalidateTag`. This is a *silent* failure mode — the app looks perfect while the bill climbs — so it is called out in AGENTS.md, the primer, SETUP.md and Appendix D.
+
+### What changed
+
+**Deleted:** `open-next.config.ts`, `wrangler.jsonc`, the four `cf:*` npm scripts, `@opennextjs/cloudflare` + `wrangler` devDependencies, the `initOpenNextCloudflareForDev()` hook in `next.config.ts`, and the Cloudflare `.gitignore` entries. Zero Cloudflare packages remain in `node_modules`.
+
+**S2 rate limiting → Upstash Redis** (Dean's call from three costed options). `src/lib/rate-limit.ts` rewritten on `@upstash/ratelimit` + `@upstash/redis`. Fixed window (2–3 Redis commands per check, vs 4–5 sliding) + `ephemeralCache` (already-blocked keys cost **zero** commands) + `analytics: false`. Free tier is 256 MB / 500K commands per month with **no card**, which preserves §1 #16's zero-card promise for self-deployers; at ~5 commands per write that's ~100k writes/month inside free. Same "degrade safe, not open" posture: unconfigured or unreachable ⇒ the write proceeds under S1 + S5.
+
+Why the alternatives lost: Vercel's WAF rate limiting is a *priced* feature on Pro, and its documented Pro counting keys are IP and JA4 only — it cannot key on `device_hash` — and self-hosters of this public repo could not use it at all.
+
+**Side effect worth knowing: the per-endpoint limits in plan §5 are now real for the first time.** On Cloudflare all three write endpoints called the single `RL_CONDITIONS` binding, whose limit lived in `wrangler.jsonc` at 60/60s, so the 30 / 20 / 10 values in the handlers were never applied in production. `tests/rate-limit.test.ts` now guards this.
+
+**`clientIp()` extracted** from three duplicate copies into `src/lib/client-ip.ts`, reading `x-real-ip` / `x-forwarded-for` (was `cf-connecting-ip`). One place to audit for S10; its return value must never reach anything but `rateLimit()`.
+
+**`vercel.json`** pins functions to `iad1` — Vercel's Runtime Cache is regional, and Neon is `us-east-1` (§1 #13).
+
+**CSP** dropped the `static.cloudflareinsights.com` / `cloudflareinsights.com` hosts; no analytics beacon is wired in today.
+
+**Docs:** plan §1 #17 added (#1/#9/#16 struck through as superseded, #6/#13 amended), §2 stack table, §7 S2, §8 budget table rebased onto Vercel/Upstash pricing, §9 phases, §11 setup checklist, and Appendix D fully rewritten. AGENTS.md, primer, README, SETUP.md, `.env.example` updated.
+
+**Tests: 29 → 37.** New `tests/rate-limit.test.ts` (8 tests, Upstash stubbed, no network): the limit trips; device and ip are independent buckets; all five distinct §5 `(limit, window)` pairs reach the limiter; limiters are reused not rebuilt; unconfigured degrades safe; unreachable degrades safe; keys stay under the `rounds:rl` prefix. This satisfies plan §9 Phase 3's "rate limit demonstrably trips (integration test with the binding stubbed)" — which the Cloudflare implementation never actually had.
+
+**Verified in sandbox** (Node 22, fresh `npm ci`, local Postgres 16): typecheck ✓ · lint ✓ · 37/37 tests ✓ · `next build` ✓, with zero Cloudflare dependencies.
+
+### ⚠️ Dean's handoff — in order
+
+1. Apply the bundle to `~/projects/rounds`, review, push the branch, open a PR into `main`.
+2. **Upstash:** create a free Redis database in `us-east-1`. No card. Copy `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`. (The Vercel Marketplace integration sets both automatically if you prefer.)
+3. **Vercel:** import the repo. Set env vars for Production **and** Preview: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, and the two Upstash vars. Confirm the function region is `iad1`.
+4. Ship a preview and walk the survey on your phone against Neon: enter a store → tables → side → flag a camera.
+5. **Verify the cache actually works cross-device** — this is the whole point of correction #2. Flag a camera on your phone, then load the same store on a second device (or a private window) and confirm the flag appears. Then check Vercel → Observability → **Runtime Cache** for a non-trivial hit rate. A hit rate near zero means reads are still going to Neon.
+6. Disconnect Cloudflare Workers Builds from the repo so it stops building. The `rounds` Worker, the `rounds-inc-cache` KV namespace and the `rounds-tags` D1 database are now orphaned and can be deleted whenever.
+
+### Open decision, deliberately NOT in this change set
+
+The survey's client-fetch layer (`src/lib/client-data.ts`, `StoreShell`, `useSurveySegments`) exists only to dodge the Cloudflare PPR bug. That bug is gone. Reverting the survey pages to normal server components that read Next `params` and call the reads directly would be cleaner, better for SSR, and would put the pages back on Vercel's ISR/CDN layer — which would cut function invocations on top of the Neon savings. It works correctly as-is on Vercel, so this is an improvement, not a fix. Flagged in a comment at the top of `client-data.ts`. Dean's call, separate branch.
+
+### Also worth knowing (not blocking)
+
+Vercel Web Analytics on Pro includes **zero** events and bills $0.03/1K — roughly $3–4/month at expected volume. The migration handoff called it "included in Pro"; it isn't. Budgeted in §8. It's a Phase 5 item either way.
+
+---
+
 ## 2026-07-14 — Live incident #2: Worker deadlock (error 1101) on shell revalidation — ✅ fixed (caching stack, KV backend)
 
 **Symptom (Dean, live):** after the stream-corruption fix deployed, the survey pages threw **error 1101 "Worker threw exception"** intermittently. Cloudflare logs: `waitUntil() tasks did not complete within the allowed time` (warn) → `The Workers runtime canceled this request because it detected that your Worker's code had hung and would never generate a response` (error).

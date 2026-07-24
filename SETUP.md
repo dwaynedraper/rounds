@@ -1,13 +1,14 @@
 # Setup
 
-**Status: partial — this covers what exists after Phase 0. The polished "stranger self-hosts in five minutes" version is a Phase 6 deliverable (`docs/ROUNDS-PLAN.md` §9).**
+**Status: partial — this covers what exists today. The polished "stranger self-hosts in five minutes" version is a Phase 6 deliverable (`docs/ROUNDS-PLAN.md` §9).**
 
 ## Prerequisites
 
 - Node 22+
-- A free [Neon](https://neon.tech) account (Postgres)
-- A free [Cloudflare](https://cloudflare.com) account with Workers + R2 enabled (hosting — wired up in a later phase)
-- A free [Resend](https://resend.com) account (magic-link email — wired up in Phase 2)
+- A free [Neon](https://neon.tech) account (Postgres) — region `us-east-1`
+- A free [Upstash](https://upstash.com) account (Redis, for rate limiting) — region `us-east-1`. No credit card required.
+- A [Vercel](https://vercel.com) account (hosting)
+- A free [Resend](https://resend.com) account (magic-link email for the CMS)
 
 ## Local development
 
@@ -18,9 +19,11 @@
 5. `npm run db:seed` — loads fictional demo data (never real store data — plan §7, S8).
 6. `npm run dev` — starts the app at `http://localhost:3000`.
 
+Rate limiting (S2) is inert locally unless you set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Without them the app logs a warning and allows every write — that is the deliberate "degrade safe, not open" posture (plan §7 S2); validation (S1) and audit (S5) still run. Set them if you specifically want to exercise the 429 path.
+
 ## Running tests
 
-Schema/constraint tests run against a **local** Postgres, not your Neon project — this keeps them fast and doesn't spend Neon's free-tier quota (plan §8).
+Schema/constraint tests run against a **local** Postgres, not your Neon project — this keeps them fast and doesn't spend Neon's free-tier quota (plan §8). The rate-limiter tests stub Upstash entirely, so they need no network.
 
 ```bash
 sudo service postgresql start   # if not already running
@@ -28,10 +31,33 @@ sudo -u postgres psql -c "CREATE DATABASE rounds_test;"
 npm run test
 ```
 
+## Deploying to Vercel
+
+1. Import the GitHub repo as a Vercel project. Vercel detects Next.js — there is no build or output-directory tuning to do.
+2. Set these environment variables for **Production** and **Preview**:
+
+   | Variable | Needed for |
+   |---|---|
+   | `DATABASE_URL` | everything (Neon, `us-east-1`) |
+   | `BETTER_AUTH_SECRET` | **the build itself** — Better Auth initialises at module load, so the build crashes without it even though the survey is loginless. 32+ random chars: `openssl rand -base64 32` |
+   | `BETTER_AUTH_URL` | CMS login (the deployment's URL) |
+   | `RESEND_API_KEY`, `AUTH_EMAIL_FROM` | CMS magic-link email |
+   | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | S2 rate limiting. The Vercel Marketplace Upstash integration sets both for you. |
+
+3. Confirm Settings → Functions → region is **Washington, D.C. (`iad1`)**. `vercel.json` pins it; the point is to sit next to Neon and to keep the regional runtime cache to one region.
+4. Run `npm run db:migrate` and `npm run db:seed` against Neon **from your own machine** — the migration tooling needs a direct connection.
+
+Pushes to `main` deploy to production; every other branch gets a preview URL. GitHub Actions runs checks only — no deploy secrets live in GitHub.
+
+## Self-hosting somewhere other than Vercel
+
+One thing does not carry over. `src/lib/reads.ts` uses **`'use cache: remote'`**, which asks the host for a durable, shared cache. Vercel supplies that handler automatically; elsewhere you must configure one yourself via Next's [`cacheHandlers`](https://nextjs.org/docs/app/api-reference/config/next-config-js/cacheHandlers) option, pointing at Redis or any other shared store.
+
+Do not "fix" this by changing it back to plain `use cache`. That directive is an **in-memory, per-instance** cache. It will look like it works, and it will quietly send every cold instance to Postgres and stop `revalidateTag` from reaching your other instances — which breaks both the free-tier budget (plan §3/§8) and cross-device freshness. See plan §1 #17c.
+
 ## What's not set up yet
 
-- Cloudflare Workers deployment (`wrangler.jsonc` bindings are scaffolded with placeholder IDs — real R2/D1/Durable Object resources get created and wired in later phases).
-- Better Auth / magic-link login (Phase 2).
-- CI secrets on GitHub (Dependabot is on; deploy secrets aren't needed yet since Workers Builds handles deploys once connected).
+- Better Auth / magic-link login is built but needs the Resend key + `BETTER_AUTH_URL` above (Phase 2).
+- Vercel Web Analytics and the monthly archival Cron Job (Phase 5).
 
 See `docs/ROUNDS-PLAN.md` for the full build order and `docs/WORKLOG.md` for current status.
