@@ -4,6 +4,23 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-24 — Node 22 → 24, and the toolchain footguns that cost Dean an hour — ✅ verified
+
+**Node 24 everywhere.** `.nvmrc`, `.node-version`, CI's `setup-node`, and a new `engines.node: "24.x"` in `package.json`. Reasons, verified against the Node release schedule and Vercel's docs on 2026-07-24: **Node 22 entered maintenance LTS on 2025-10-21** (EOL 2027-04-30) while **24 has been Active LTS since 2025-10-28** (maintenance 2026-10-20, EOL 2028-04-30), and **Vercel's default for new projects is already 24.x** (22.x and 20.x also available). Dean's other ~20 projects are on 24, so pinning this one to 22 was friction with no upside.
+
+`engines.node` overrides the Vercel project setting, so the version is declared in the repo rather than in a dashboard nobody remembers to check. Verified green on Node 24.18.0 in the sandbox from a clean clone: typecheck ✓ · lint ✓ · 37/37 tests ✓ · `next build` ✓.
+
+**Answering the question directly, since it comes up:** `.nvmrc` was *already* the per-repo mechanism — `nvm use` in this directory switches that shell only and never touches the global default. The pin was moved to 24 because 24 is the better pin, not because per-repo pinning didn't work.
+
+**Two footguns documented in SETUP.md, both of which actually bit.**
+
+1. **`SETUP.md` gave Linux-only Postgres instructions.** On macOS, Homebrew's Postgres creates a superuser named after your macOS account, not `postgres` — but `tests/db-test-client.ts` defaults to connecting as `postgres` (matching CI's container). Result: `role "postgres" does not exist`, SQLSTATE 28000, all three DB-backed suites red while the rate-limiter suite passes. Now has both macOS and Linux setup blocks, plus the symptom spelled out so the next person recognises it.
+2. **npm only.** Running `pnpm install`/`pnpm dev` in this repo moves every npm-installed package into `node_modules/.ignored`; interrupt it and `tsc`, `vitest` and `next` all become "command not found". Worse, a pnpm tree is not what CI (`npm ci`) or Vercel build, so anything verified under it proves nothing. Recovery is `rm -rf node_modules pnpm-lock.yaml && npm ci`. Called out in SETUP.md prerequisites and in plan §2's tooling row.
+
+Deliberately did NOT add a `packageManager` field to pin npm via corepack: Node 24 bundles npm 11, and pinning an exact npm version there would force a downgrade and drag corepack into the build. The lockfile plus the documented rule is enough.
+
+---
+
 ## 2026-07-24 — Migrated off Cloudflare to Vercel-native (plan §1 #17) — 🚧 built + verified in sandbox, needs Dean's Vercel/Upstash setup
 
 **Why:** every hard production bug this project hit was Cloudflare-adapter-specific (both 2026-07-14 incidents below). Dean owns Vercel Pro and works in it daily. On Vercel, PPR / `use cache` / `revalidateTag` / ISR are first-party, so neither incident can recur, and the entire OpenNext caching stack is **deleted, not reconfigured**. Full decision record: plan §1 amendment #17, which supersedes #1, #9 and #16 and rewrote Appendix D.

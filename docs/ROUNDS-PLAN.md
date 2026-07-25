@@ -57,7 +57,7 @@ Unchanged and reaffirmed: the four-concept data model (catalog / planogram / con
 | Email | **Resend** free tier (100/day) | Magic links only; ~10/week actual. |
 | Tests | **Vitest** (logic) + **Playwright** (2 public E2E flows) | §10. |
 | Icons | Hand-rolled SVG sprite | No icon library. |
-| Tooling | npm · Node 22 LTS+ · ESLint + Prettier · GitHub Actions (checks) | Boring on purpose. |
+| Tooling | **npm** (never pnpm/yarn — `package-lock.json` is the lockfile CI and Vercel use) · **Node 24** (Active LTS; 22 went to maintenance 2025-10-21) · ESLint + Prettier · GitHub Actions (checks) | Boring on purpose. |
 
 ---
 

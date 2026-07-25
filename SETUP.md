@@ -4,7 +4,8 @@
 
 ## Prerequisites
 
-- Node 22+
+- **Node 24** (Active LTS). `.nvmrc` and `.node-version` pin it, so `nvm use` in the repo root selects it for that shell only — you do not need to change your global default. CI and Vercel both build on 24, and `package.json` `engines.node` enforces it.
+- **npm.** Not pnpm, not yarn, not bun. `package-lock.json` is the lockfile CI and Vercel use; running `pnpm install` here moves npm's packages into `node_modules/.ignored` and leaves you with a tree neither CI nor Vercel will reproduce. If that happens: `rm -rf node_modules pnpm-lock.yaml && npm ci`.
 - A free [Neon](https://neon.tech) account (Postgres) — region `us-east-1`
 - A free [Upstash](https://upstash.com) account (Redis, for rate limiting) — region `us-east-1`. No credit card required.
 - A [Vercel](https://vercel.com) account (hosting)
@@ -25,11 +26,28 @@ Rate limiting (S2) is inert locally unless you set `UPSTASH_REDIS_REST_URL` and 
 
 Schema/constraint tests run against a **local** Postgres, not your Neon project — this keeps them fast and doesn't spend Neon's free-tier quota (plan §8). The rate-limiter tests stub Upstash entirely, so they need no network.
 
+The test client connects as role `postgres` to database `rounds_test` (that's what CI's Postgres container provides). Override with `TEST_DATABASE_URL` if you want something else.
+
+**macOS (Homebrew).** Homebrew's Postgres creates a superuser named after your macOS account, *not* `postgres`, so you have to create that role once. If you skip this you get `role "postgres" does not exist` (SQLSTATE 28000) and all three DB-backed suites fail while the rate-limiter suite passes.
+
 ```bash
-sudo service postgresql start   # if not already running
-sudo -u postgres psql -c "CREATE DATABASE rounds_test;"
+brew services start postgresql@16
+createuser -s postgres
+psql -d postgres -c "ALTER ROLE postgres WITH PASSWORD 'postgres';"
+createdb -O postgres rounds_test
 npm run test
 ```
+
+**Linux (Debian/Ubuntu).**
+
+```bash
+sudo service postgresql start
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+sudo -u postgres createdb rounds_test
+npm run test
+```
+
+`createuser` and `createdb` print nothing on success. If `createdb` says the database already exists, skip it.
 
 ## Deploying to Vercel
 
