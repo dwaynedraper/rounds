@@ -344,6 +344,10 @@ Secrets inventory (complete): `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH
 
 ## Appendix A · Drizzle schema (authoritative)
 
+**Resynced 2026-07-24** — this appendix had drifted from `src/db/schema.ts` since 2026-07-14 (the §1 #15 realignment widened `sections.key`, and Phase 2 moved the auth tables out). The block below is now a verbatim copy of `src/db/schema.ts`. That file is the source of truth; this is the mirror. If you change one, change the other in the same commit — a future session reading a stale appendix will build against a schema that does not exist.
+
+Better Auth's own tables (`user`, `session`, `account`, `verification`) plus `user_brands` live in `src/db/auth-schema.ts`, not here — see Appendix C and the note at the bottom of this file.
+
 Verify exact Drizzle API names against the installed version; the *shapes, constraints, and indexes* below are locked. CHECK constraints noted in comments go in the migration SQL.
 
 ```ts
@@ -368,7 +372,6 @@ import { sql } from 'drizzle-orm'
 export const productKind = pgEnum('product_kind', ['camera', 'lens', 'accessory', 'tablet', 'display'])
 export const layoutKind  = pgEnum('layout_kind', ['endcap', 'plain'])
 export const surfaceKind = pgEnum('surface_kind', ['gray', 'wood'])
-export const sectionKey  = pgEnum('section_key', ['endcap', 'right', 'left', 'lens'])
 export const userRole    = pgEnum('user_role', ['admin', 'editor'])
 
 // ── CATALOG ──────────────────────────────────────────────────────────────
@@ -419,13 +422,18 @@ export const fixtureBrands = pgTable('fixture_brands', {
   brandId:   integer('brand_id').notNull().references(() => brands.id),
 }, (t) => [primaryKey({ columns: [t.fixtureId, t.brandId] })])
 
+// key is '<side>-<n>' ('left-1', 'right-2', 'end-1') — the fixed floor
+// geometry (plan §1 #15) lives in src/lib/floor.ts and is seeded 1:1 here.
 export const sections = pgTable('sections', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),
   fixtureId: integer('fixture_id').notNull().references(() => fixtures.id),
-  key:       sectionKey('key').notNull(),
+  key:       text('key').notNull(),
   label:     text('label').notNull(),
   sort:      smallint('sort').notNull().default(0),
-}, (t) => [uniqueIndex('sections_fixture_key_idx').on(t.fixtureId, t.key)])
+}, (t) => [
+  uniqueIndex('sections_fixture_key_idx').on(t.fixtureId, t.key),
+  check('sections_key_format', sql`${t.key} ~ '^[a-z]+-[0-9]$'`),
+])
 
 export const positions = pgTable('positions', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),
@@ -500,27 +508,13 @@ export const roundItems = pgTable('round_items', {
   check('round_items_note_length', sql`char_length(${t.note}) <= 280`),
 ])
 
-// ── USERS (CMS auth — Better Auth, decided 2026-07-13; see docs/WORKLOG.md) ─
-// Better Auth's own tables (accounts/sessions/verification) are generated
-// by `npx @better-auth/cli generate` in Phase 2, once the auth config
-// exists — they intentionally are NOT hand-written here to avoid drifting
-// from what the library actually expects. This table is OURS: it is the
-// row Better Auth's user table extends with a role + brand scope, and it's
-// what user_brands and audit_log.actor (email) reference.
-export const users = pgTable('users', {
-  id:            text('id').primaryKey(),
-  name:          text('name'),
-  email:         text('email').notNull().unique(), // stored lowercase
-  emailVerified: boolean('email_verified').notNull().default(false),
-  role:          userRole('role').notNull().default('editor'),
-  createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt:     timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
-
-export const userBrands = pgTable('user_brands', {
-  userId:  text('user_id').notNull().references(() => users.id),
-  brandId: integer('brand_id').notNull().references(() => brands.id),
-}, (t) => [primaryKey({ columns: [t.userId, t.brandId] })])
+// ── USERS (CMS auth) ────────────────────────────────────────────────────
+// The user/session/account/verification tables live in ./auth-schema.ts
+// (Better Auth owns them; `role` is added there as an additionalField).
+// user_brands (brand scoping, S4) also lives there, next to `user`, to keep
+// a single import direction (auth-schema imports from schema, never back).
+// The `userRole` enum above is shared by both files.
+// audit_log.actor is just text (email OR device_hash) — no FK to user.
 
 // ── AUDIT ────────────────────────────────────────────────────────────────
 export const auditLog = pgTable('audit_log', {
