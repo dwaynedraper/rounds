@@ -4,6 +4,52 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-24 — Post-break system audit + the work it turned up — ✅ verified
+
+Dean returned from a break and asked for a medium, non-adversarial audit: current state vs the plan, where git stands, tests and lints green. Audited `c1b5357` from a fresh GitHub clone. Full report delivered separately; this entry records what the audit **found** and what was **done about it**.
+
+### Baseline: healthy
+
+Gate green from a clean clone, exactly as CI runs it: typecheck ✓ · lint ✓ · db:migrate ✓ · 37/37 tests ✓ · `next build` ✓. `schema.ts` matches the committed migrations (`drizzle-kit generate`: nothing to migrate). No secrets or real store data anywhere in history (S8 holds). `main` clean at `5343be1` and had NOT absorbed the migration commits — the earlier "empty `main..HEAD`" scare was a false alarm.
+
+`format:check` fails on 89 files, but it fails on `main` too (88) and is not part of CI. Pre-existing Prettier drift, not a regression. Deliberately **not** fixed here: an 89-file reformat during an open migration PR buries the real diff. Do it as a standalone commit after the merge.
+
+### Finding 1 — nine Next.js advisories (fixed)
+
+`next@16.2.10` carried nine published advisories, 4 high, all range `>=16.0.0 <16.2.11`. The 2026-07-14 audit had recorded two moderates; this changed because time passed.
+
+Four never applied here — no `middleware.ts` (S4 puts authorization in the data layer, which is exactly why), no custom server, no rewrites, no `next/image`. Three did, and the one weighted heaviest is **cache confusion of response bodies**, in an app whose entire free-tier budget rests on cached responses (§3).
+
+Went to **16.3.0**, not the minimum 16.2.11: still non-major, and it additionally clears the transitive `postcss` (4 advisories including sourceMappingURL path traversal) and `sharp`/libvips highs that 16.2.x carries. `npm audit fix` cleared the last `nanoid` high. **4 high + 5 moderate → 0 high, 5 moderate.** The remainder is the esbuild dev-server chain via `drizzle-kit`; npm's fix is a *major* downgrade to drizzle-kit 0.18.1, which is worse than the problem — left alone knowingly.
+
+Also took Dependabot's minor/patch group (react 19.2.8, better-auth 1.6.27, resend 6.19.0, @playwright/test 1.62.1) so its open PR rebases to near-empty. Did **not** take `@opennextjs/cloudflare` 1.20.2 from it — that package no longer exists here. Re-pinned the framework quartet exactly after `npm install` rewrote them to caret ranges.
+
+### Finding 2 — S10 was being violated in production code (fixed)
+
+**Better Auth writes the client IP into `session.ip_address` by default.** It had been doing so since Phase 2. Plan S10 and §1 #6 say "No raw IPs stored, anywhere, ever" and call it a *grep-able invariant* — but nothing was grepping, so it went unnoticed for ten days.
+
+Fixed with `advanced.ipAddress.disableIpTracking: true`, verified against the installed package rather than memory: `@better-auth/core/dist/utils/ip.mjs:202` short-circuits `getIp()` to null, and `internal-adapter.mjs:191` then writes `""`. No address reaches Postgres. The column is kept rather than dropped — removing it means a migration plus a hand-modeled divergence from the schema Better Auth expects, for no additional privacy, since it is already always empty.
+
+**Knowingly not fixed:** `session.user_agent` is still recorded. Not in S10's enumeration (IPs, emails outside `users`, names, locations), covers ~5 authenticated CMS users rather than ~1,000 anonymous reps, and suppressing it means fighting the library. Recorded here so the next session decides deliberately rather than discovering it.
+
+Added `tests/s10-invariants.test.ts` — 5 tests, no DB, no network — to make "grep-able invariant" literal: the config flag is present; IP headers are read in exactly one module; in all three write handlers `ip` appears exactly twice in code (declaration + limiter key) so it cannot leak into a log, response body, audit row or DB write; our tables declare no ip column; `audit.ts` never touches an address. **Confirmed the guards fail when a violation is injected**, not merely that they pass today. Tests 37 → 42.
+
+### Finding 3 — plan Appendix A had drifted (fixed)
+
+Out of sync with `src/db/schema.ts` since 2026-07-14, in two places: `sections.key` (plan still showed the `sectionKey` pgEnum; code has text + a CHECK, per §1 #15f) and `users`/`user_brands` (plan still hand-wrote them; Phase 2 moved them to `auth-schema.ts`). Both are correct decisions that never made it back into the plan.
+
+`schema.ts` declares itself the source of truth for that appendix and says the two "must never drift." Appendix A is now a byte-identical copy with a preamble saying which file wins. No code change.
+
+### Phase 1 unblock
+
+Rendered `/kitchen-sink` (light + dark) and the survey keypad at 402px phone width against the real production build, and sent the images to Dean. Phase 1 has been stalled on his design feedback since 2026-07-14, and the design system propagates into every screen built after it — this removes "I'd have to run it locally" as a reason to keep deferring.
+
+### Still blocked on Dean (cannot be done from a sandbox)
+
+Open the PR (CI has never run on this branch; `main`'s protection needs that `checks` status) · Vercel + Upstash setup — **until `UPSTASH_REDIS_REST_URL`/`_TOKEN` exist, S2 is inert and the loginless write endpoints have no abuse damper** · confirm Neon is migrated + seeded · verify the remote cache works cross-device on a preview · fast-forward `develop` to `main` · Phase 1 design feedback.
+
+---
+
 ## 2026-07-24 — Node 22 → 24, and the toolchain footguns that cost Dean an hour — ✅ verified
 
 **Node 24 everywhere.** `.nvmrc`, `.node-version`, CI's `setup-node`, and a new `engines.node: "24.x"` in `package.json`. Reasons, verified against the Node release schedule and Vercel's docs on 2026-07-24: **Node 22 entered maintenance LTS on 2025-10-21** (EOL 2027-04-30) while **24 has been Active LTS since 2025-10-28** (maintenance 2026-10-20, EOL 2028-04-30), and **Vercel's default for new projects is already 24.x** (22.x and 20.x also available). Dean's other ~20 projects are on 24, so pinning this one to 22 was friction with no upside.
