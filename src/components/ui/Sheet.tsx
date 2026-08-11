@@ -19,20 +19,45 @@ export interface SheetProps {
 export function Sheet({ open, onClose, title, children, footer }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /* onClose is held in a ref, and the effect below depends ONLY on `open`.
+   *
+   * This is load-bearing, not tidiness. Every caller passes an inline arrow
+   * (`onClose={() => setPickFor(null)}`), which is a new function identity on
+   * every render. With `onClose` in the dependency array, the effect tore down
+   * and re-ran on EVERY render of the parent — including the re-render caused
+   * by typing one character into a field inside the sheet. Re-running it hit
+   * `panelRef.current.focus()`, which yanked focus off the input.
+   *
+   * Symptom: type one character, the field blurs. Click back in, type one more
+   * character, blurs again. Reported by Dean from the field, 2026-07-24, in the
+   * layout-edit search box; the note field had it too.
+   *
+   * Fixed HERE rather than by wrapping each caller's handler in useCallback,
+   * because that would leave the trap armed for the next person to add a
+   * <Sheet> with an inline handler — which is the natural way to write one. */
+  const onCloseRef = useRef(onClose);
+  // Kept current in an effect, not during render — React 19's react-hooks/refs
+  // rule rejects writing a ref while rendering, and it is right to.
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // Focus moves into the dialog once, when it opens — never again while the
+    // user is typing in it.
     panelRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

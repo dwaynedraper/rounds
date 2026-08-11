@@ -80,6 +80,12 @@ export default function KitchenSink() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [flags, setFlags] = useState({ broken: false, missing: true, demo: false });
   const [sheetOpen, setSheetOpen] = useState(false);
+  // CONTROLLED on purpose. An uncontrolled field here is why the sheet
+  // focus bug (2026-07-24) went unseen: typing into it never re-rendered
+  // the parent, so it never exercised the path that was broken. A text
+  // field bound to parent state, inside a Sheet, is the exact combination
+  // reps hit in edit mode. Keep it controlled.
+  const [sheetNote, setSheetNote] = useState("");
 
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";
@@ -263,7 +269,13 @@ export default function KitchenSink() {
             <FlagToggle label="Broken" tone="danger" pressed={flags.broken} onToggle={(v) => setFlags((f) => ({ ...f, broken: v }))} />
             <FlagToggle label="Missing" tone="warn" pressed={flags.missing} onToggle={(v) => setFlags((f) => ({ ...f, missing: v }))} icon="alert" />
           </div>
-          <Field label="Note" placeholder="Optional note…" />
+          <Field
+            label="Note"
+            value={sheetNote}
+            onChange={(e) => setSheetNote(e.target.value.slice(0, 280))}
+            placeholder="Optional note…"
+            hint={`${sheetNote.length}/280 · typing here must not blur`}
+          />
         </div>
       </Sheet>
     </main>

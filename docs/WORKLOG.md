@@ -4,6 +4,33 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-24 — Preview verified on Vercel; Sheet focus bug found and fixed — ✅
+
+**The migration's load-bearing claim is confirmed in production.** Dean flagged a camera on his phone against the Vercel preview and it appeared on a second device. That is `'use cache: remote'` + `revalidateTag` working across function instances — the thing plain `use cache` would have broken silently (§1 #17c). Neon is migrated and seeded (3 brands, 4 flags, 3 fixtures, 64 positions, admin row). CI green, Vercel preview deployed. The one failing PR check is Cloudflare Workers Builds, which is correct — it is still watching the repo and the files it needs are gone. Unrequired, so it does not block the merge; disconnect it in the Cloudflare dashboard.
+
+### Bug: text fields blurred after one keystroke — ✅ fixed
+
+**Symptom (Dean, on the preview):** in layout-edit mode, typing into a field blurred after a single character. Click back in, one more character, blur again.
+
+**Root cause — NOT the controlled inputs**, which was the obvious first suspect and is worth recording as ruled out. `Sheet` listed `onClose` in its effect's dependency array. Every caller passes an inline arrow (`onClose={() => setPickFor(null)}`), a new function identity per render, so the effect tore down and re-ran on *every* parent render — including the one caused by typing a character into a controlled field inside the sheet. Re-running it hit `panelRef.current?.focus()`, moving focus off the input onto the dialog panel.
+
+**How controlled-component causes were eliminated**, rather than assumed:
+- A controlled-value bug drops or reverts the character while focus *stays*. Here the character was kept and focus *moved* — different signature.
+- An inline-component remount would lose the value too. The value survived.
+- Decisive: reverting **only** the dependency array, touching nothing about the inputs or their state, reproduced it exactly — 15 keystrokes yielded `"A"` with `document.activeElement` = `DIV`. Restoring it gave the full string with `activeElement` = `INPUT`. Identical input code in both builds.
+
+**Fix** is in `Sheet`, not at the call sites: `onClose` moved to a ref (assigned in an effect — React 19's `react-hooks/refs` rule correctly rejects writing refs during render) and the effect now depends only on `[open]`. Fixing it at the call sites with `useCallback` would have left the trap armed for the next person who writes a `<Sheet>` with an inline handler, which is the natural way to write one.
+
+**Why Phase 1 review missed it:** the kitchen-sink sheet's `Field` was *uncontrolled*, so typing into it never re-rendered the parent and never exercised the broken path. It is now controlled, which is the honest representation of how reps use it. Phase 1's stated purpose is that the kitchen sink renders every component in every state — a text field bound to parent state inside a Sheet is a state it was missing.
+
+**Verified** against the production build with Playwright in both directions, plus Escape-to-close still working through the ref indirection.
+
+### Deferred by Dean, deliberately
+
+S2 rate limiting is still inert — the Upstash env vars are not set on Vercel. Dean's call: ~20 early adopters will not break it, and getting the tool in front of reps matters more right now. **This is a knowing deferral, not an oversight.** It is two environment variables away from armed, the code and its 8 tests are already in place, and the app degrades safe rather than open (S1 validation and S5 audit still run on every write). Revisit before the rep count grows or the URL circulates beyond people Dean knows.
+
+---
+
 ## 2026-07-24 — Post-break system audit + the work it turned up — ✅ verified
 
 Dean returned from a break and asked for a medium, non-adversarial audit: current state vs the plan, where git stands, tests and lints green. Audited `c1b5357` from a fresh GitHub clone. Full report delivered separately; this entry records what the audit **found** and what was **done about it**.
