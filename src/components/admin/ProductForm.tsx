@@ -11,9 +11,9 @@ type BrandOption = { id: number; name: string };
 type Initial = {
   brandId?: number;
   quickName?: string;
-  longName?: string;
-  model?: string;
-  sku?: string;
+  longName?: string | null;
+  model?: string | null;
+  sku?: string | null;
   kind?: string;
   active?: boolean;
 };
@@ -48,10 +48,10 @@ export function ProductForm({
         </select>
       </label>
 
-      <Field label="Quick name" name="quickName" defaultValue={initial.quickName} required placeholder="A7 V" hint="Short label shown in the survey" />
-      <Field label="Long name" name="longName" defaultValue={initial.longName} required placeholder="Alpha 7 V Full-Frame Camera" />
-      <Field label="Model" name="model" defaultValue={initial.model} required placeholder="ILCE-7M5" />
-      <Field label="SKU" name="sku" mono defaultValue={initial.sku} required placeholder="1234567" inputMode="numeric" hint="Exactly 7 digits" />
+      <Field label="Quick name" name="quickName" defaultValue={initial.quickName} required placeholder="A7 V" hint="Required — this is what reps read while walking the table" />
+      <Field label="Long name" name="longName" defaultValue={initial.longName ?? ""} placeholder="Alpha 7 V Full-Frame Camera" hint="Optional" />
+      <Field label="Model" name="model" defaultValue={initial.model ?? ""} placeholder="ILCE-7M5" hint="Optional" />
+      <Field label="SKU" name="sku" mono defaultValue={initial.sku ?? ""} placeholder="1234567" inputMode="numeric" hint="Optional — but exactly 7 digits if you enter one" />
 
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">Kind</span>

@@ -34,9 +34,15 @@ export const products = pgTable('products', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),
   brandId:   integer('brand_id').notNull().references(() => brands.id),
   quickName: text('quick_name').notNull(),
-  longName:  text('long_name').notNull(),
-  model:     text('model').notNull(),
-  sku:       text('sku').notNull().unique(), // 7-digit BBY SKU
+  // Only brand_id + quick_name are REQUIRED (plan §1 #20, Dean 2026-07-24):
+  // brand ties the camera to a table, quick_name is what a rep reads while
+  // walking. The rest are useful when known and must never block getting a
+  // camera onto the floor plan.
+  longName:  text('long_name'),
+  model:     text('model'),
+  sku:       text('sku').unique(), // 7-digit BBY SKU when known; Postgres
+                                   // allows many NULLs in a unique index, so
+                                   // unknown SKUs do not collide.
   kind:      productKind('kind').notNull(),
   active:    boolean('active').notNull().default(true),
   meta:      jsonb('meta').notNull().default(sql`'{}'::jsonb`),
@@ -44,6 +50,9 @@ export const products = pgTable('products', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('products_brand_idx').on(t.brandId),
+  // NULL-safe by construction: a CHECK is violated only when it evaluates
+  // to FALSE, and `NULL ~ '...'` is NULL. An unknown SKU passes; a present
+  // one must still be exactly 7 digits.
   check('products_sku_format', sql`${t.sku} ~ '^[0-9]{7}$'`),
 ])
 

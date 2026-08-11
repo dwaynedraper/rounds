@@ -4,6 +4,45 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-24 — Product fields relaxed + report format rewritten (plan §1 #20) — ✅
+
+Both from Dean, from the floor, after walking a real store on the preview.
+
+### Only brand + quick name are required
+
+`long_name`, `model` and `sku` are now nullable. Brand ties a camera to a table and quick name is what a rep reads while walking — those two are the job. Demanding a long name, a model code and a 7-digit SKU before a camera could exist meant hitting a wall mid-round over data nobody carries on the floor.
+
+Migration `0003`: three `ALTER COLUMN ... DROP NOT NULL`. No table rewrite, no data loss, safe to run against Neon while the app is live.
+
+Two details worth keeping straight:
+
+- **Optional is not unvalidated.** A SKU that IS supplied must still be exactly 7 digits. A half-typed SKU looks authoritative and is worse than none.
+- **`sku` stays UNIQUE.** Postgres permits any number of NULLs in a unique index, so "SKU unknown" never collides with another "SKU unknown". And the existing `products_sku_format` CHECK needed no change: a CHECK is violated only when it evaluates to FALSE, and `NULL ~ '...'` is NULL. Both facts are now covered by tests that insert rows rather than assert on intent.
+
+Empty-string handling was the non-obvious part. An HTML form submits `""` for an untouched text input, so `""` has to normalise to `null` in the Zod layer or the fields would be optional in name only. Same transform serves the bulk importer, which already passes `""` for missing cells.
+
+### Report format
+
+Was: `Nikon / Right wall #1 — Z30: alarm, missing — This is a note about…`
+Now:
+
+```
+Store 0148
+Canon EOS R: missing, broken
+Canon EOS R8: no-power
+Nikon Z30: alarm, missing — Loose from the mount, told MOD
+```
+
+Brand and quick name only. The wall label and position number are gone — whoever reads this is standing at the table and identifies the camera by name, so the location was noise that pushed the useful part off a phone screen. Notes stay on the same line after an em dash (Dean's choice when asked; one line per camera is the rule that keeps it scannable).
+
+`tests/report.test.ts` pins the format character for character, including the absence of a blank line under the header. The format IS the feature here — it is what reps paste into a text at the end of a walk — so it gets tests rather than a comment.
+
+Also hardened `buildReport` against a section shorter than its capacity. `buildTableViews` never emits one, but the test fixture did, and a crash there would eat a rep's whole walk.
+
+**Tests 45 → 51.** Appendix A resynced to `schema.ts` again in the same commit, per the rule that they change together.
+
+---
+
 ## 2026-07-24 — Preview verified on Vercel; Sheet focus bug found and fixed — ✅
 
 **The migration's load-bearing claim is confirmed in production.** Dean flagged a camera on his phone against the Vercel preview and it appeared on a second device. That is `'use cache: remote'` + `revalidateTag` working across function instances — the thing plain `use cache` would have broken silently (§1 #17c). Neon is migrated and seeded (3 brands, 4 flags, 3 fixtures, 64 positions, admin row). CI green, Vercel preview deployed. The one failing PR check is Cloudflare Workers Builds, which is correct — it is still watching the repo and the files it needs are gone. Unrequired, so it does not block the merge; disconnect it in the Cloudflare dashboard.

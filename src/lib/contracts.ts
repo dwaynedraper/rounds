@@ -13,12 +13,39 @@ const shiftStr = z.string().max(24);
 export const productKinds = ["camera", "lens", "accessory", "tablet", "display"] as const;
 
 // ---- CMS: products ----
+//
+// Only brandId + quickName are required (plan §1 #20). An HTML form always
+// submits "" for an untouched text input, so "" has to mean "not provided"
+// rather than "invalid" — otherwise the optional fields would be optional in
+// name only. Everything empty normalises to null, which is what the nullable
+// columns want.
+const optionalText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .optional()
+    .transform((v) => {
+      const trimmed = v?.trim() ?? "";
+      return trimmed === "" ? null : trimmed;
+    });
+
+/** SKU is optional, but a SKU that IS given must still be exactly 7 digits —
+ *  a half-typed one is worse than none, because it looks authoritative. */
+export const optionalSku = z
+  .string()
+  .optional()
+  .transform((v) => {
+    const trimmed = v?.trim() ?? "";
+    return trimmed === "" ? null : trimmed;
+  })
+  .refine((v) => v === null || /^\d{7}$/.test(v), "SKU must be exactly 7 digits");
+
 export const productInput = z.object({
   brandId: z.coerce.number().int().positive(),
-  quickName: z.string().min(1).max(80),
-  longName: z.string().min(1).max(160),
-  model: z.string().min(1).max(80),
-  sku,
+  quickName: z.string().min(1, "Quick name is required").max(80),
+  longName: optionalText(160),
+  model: optionalText(80),
+  sku: optionalSku,
   kind: z.enum(productKinds),
   active: z.coerce.boolean().default(true),
 });
@@ -28,10 +55,10 @@ export type ProductInput = z.infer<typeof productInput>;
 // validated per-row against productInput.
 export const bulkProductRow = z.object({
   brandSlug: z.string().min(1),
-  quickName: z.string().min(1).max(80),
-  longName: z.string().min(1).max(160),
-  model: z.string().min(1).max(80),
-  sku,
+  quickName: z.string().min(1, "Quick name is required").max(80),
+  longName: optionalText(160),
+  model: optionalText(80),
+  sku: optionalSku,
   kind: z.enum(productKinds),
 });
 
