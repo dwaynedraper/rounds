@@ -15,23 +15,29 @@ Companion document: `ROUNDS-PRIMER.md` — the context brief for the implementin
 
 | # | Change | Why |
 |---|---|---|
-| 1 | **Hosting locked: Cloudflare Workers via OpenNext** (was an open question) | Free tier explicitly permits commercial use; 100k requests/day ≈ 30× expected traffic; rate limiting, Turnstile, and cookieless analytics are all built in and free. OpenNext fully supports Next.js 16 (verified 2026-07). |
+| 1 | ~~**Hosting locked: Cloudflare Workers via OpenNext**~~ **— SUPERSEDED BY #17 (Vercel-native).** Kept for the record. | Free tier explicitly permits commercial use; 100k requests/day ≈ 30× expected traffic; rate limiting, Turnstile, and cookieless analytics are all built in and free. OpenNext fully supports Next.js 16 (verified 2026-07). |
 | 2 | **Abuse controls moved from Phase 5 → Phase 3** | The loginless write endpoints must never exist un-protected, even for a week. Protection ships in the same commit as the endpoint. |
 | 3 | **Magic-link allowlist enforced explicitly** | Auth libraries commonly sign in *any* address by default unless self-registration is explicitly disabled. Auth (§14 below) uses Better Auth's `disableSignUp: true`, so "only ~5 people log in" is enforced by the library, not a hand-rolled callback someone could forget. |
 | 4 | **Roles enforced in the data layer, not just middleware** | CVE-2025-29927 (Next.js middleware bypass) is the precedent. Middleware is convenience; server actions re-check role + brand scope before every mutation. |
 | 5 | **`round_items.product` jsonb replaced by a content-hashed `product_snapshots` table** | The inline blob would have cost ~800 MB/yr — Neon free is 0.5 GB *total* and fails writes when exceeded. Deduped snapshots keep the identical immutability guarantee at ~5× less storage. |
-| 6 | **No raw IPs stored, anywhere, ever** | IP addresses are personal data; the plan promises "no personal data." Rate-limit counters are ephemeral (10–60 s windows in the Workers rate-limit binding); audit rows record `device_hash` only. |
+| 6 | **No raw IPs stored, anywhere, ever** | IP addresses are personal data; the plan promises "no personal data." Rate-limit counters are ephemeral (fixed-window Redis keys that expire with the window — §1 #17b; originally the Workers rate-limit binding); audit rows record `device_hash` only. |
 | 7 | **Idempotency keys + last-write-wins rules specified** | The offline write queue retries; without a `client_key` unique constraint, a flaky-Wi-Fi retry creates duplicate rounds, and a stale queued write clobbers newer data. |
 | 8 | **Everything reads from cache; the DB is touched only by writes** | Tag-based caching (`catalog`, `store:<n>`, `rounds:<n>`) keeps Neon comfortably inside all three free limits (storage, 100 CU-hours/mo compute, 5 GB/mo egress — exceeding egress *suspends the database until next month*). |
-| 9 | **Vercel Analytics → Cloudflare Web Analytics** | Vercel Analytics only works on Vercel hosting. CF Web Analytics is free and cookieless, preserving the no-cookies promise. |
+| 9 | ~~**Vercel Analytics → Cloudflare Web Analytics**~~ **— SUPERSEDED BY #17e (back to Vercel Web Analytics, which is cookieless but NOT free on Pro).** Kept for the record. | Original rationale: Vercel Analytics only works on Vercel hosting, and CF Web Analytics is free and cookieless. The hosting premise no longer holds after #17. |
 | 10 | **Sessions: JWT strategy** | 5 CMS users; a session-table lookup per request buys nothing. |
 | 11 | **Name locked: "Rounds". License: MIT. Repo: `~/projects/rounds`, public from commit one.** | Placeholder-itis is a tax. The name is good. Dean's call (2026-07 override of the original "private until Phase 6" default): source visibility isn't the risk — a live unprotected write endpoint is, and S1/S2/S5–S7 ship in the same commits as the endpoints (Phase 3), so there's no window where a deployed, discoverable endpoint is both public and unarmored. S8/S10 (no real data, no secrets, ever) apply unconditionally regardless of visibility, so going public early costs nothing. |
 | 12 | **Rounds freeze the note too** | A round is "what you found on a date" — the note is part of what you found. |
-| 13 | **Region: `us-east-1` everywhere it's configurable (Neon, D1, DO location hints).** | Dean's call (2026-07 override of the original `us-east-2` default): Resend and several other platforms in this stack only offer `us-east-1`, and colocating the DB with them removes a needless cross-region hop on every CMS email + admin write. Cloudflare Workers themselves still execute at whichever edge PoP is nearest each rep, unaffected by this. |
+| 13 | **Region: `us-east-1` everywhere it's configurable (Neon, Upstash, and Vercel functions as `iad1` — §1 #17d).** | Dean's call (2026-07 override of the original `us-east-2` default): Resend and several other platforms in this stack only offer `us-east-1`, and colocating the DB with them removes a needless cross-region hop on every CMS email + admin write. Static assets still serve from whichever CDN PoP is nearest each rep, unaffected by this. |
 | 14 | **Auth library: Better Auth, not Auth.js v5** | Discovered mid-Phase-0 (2026-07-13): Auth.js v5 is still beta after 2+ years with no GA date, and the Auth.js project is now organizationally part of Better Auth, which is the maintainers' recommended path for new projects. Dean's call, presented as a real fork per the primer's "don't silently substitute" rule — see Appendix C for the full rationale and verified package details. |
 | 15 | **Survey realignment (2026-07-14, Dean's floor photos + v3 mockup approved).** (a) The floor plan is a **fixed constant**: three tables in fixed order Canon · Nikon · Sony, two looks (oak islands for Canon/Nikon: 2 walls × 2 sections; grey-marble Sony: end + 2 walls × 2 sections). Geometry lives in code (`src/lib/floor.ts`) and its DB rows are seeded identically for every deployment; only **camera assignments** vary per store. (b) **Stores auto-create on entry** — no admin gatekeeping (`POST /api/stores`, rate-limited, audited). (c) **Reps build their store's layout** by assigning master-list products to fixed slots (`POST /api/layout`, master-list-constrained upserts into `store_positions` — hereby promoted from "overrides" to "the store's layout"; `positions.product_id` remains as an optional global default). (d) Slot grids: 4 slots per section default; a 5th camera spreads the grid to 5; empty slots keep their spacing. (e) Survey UI is spatial: overview drawn as square textured slabs with rotated top-down camera SVGs → single table with tappable sides → side view in Dean's v1 format (positions left→right *viewed from the end cap*; camera name + Alarm / No Power / Broken / Missing + inline note) with a **Record ⇄ Edit-layout toggle**. (f) Flag vocabulary seeds as exactly those four. No per-camera brand labels; no accessory/stock tracking (Best Buy Power BI owns that). `sections.key` widens from enum to text (`left-1`, `right-2`, `end-1`, …). | The generic list-style survey deviated from the physical floor. Screens must mirror the tables reps stand at; stores must not need an admin to exist; layouts differ per store, so reps own them. |
 
-| 16 | **Incremental cache backend: Workers KV, not R2 (2026-07-14, overrides Appendix D's R2 pick).** The OpenNext caching stack is REQUIRED for correctness, not just efficiency: deployed without it the Worker **deadlocked** on prerendered-shell revalidation (stale shells trigger a background `waitUntil` revalidation that hangs forever with no queue → runtime kills the request → error 1101). The Durable-Object revalidation **queue** is the actual fix; the incremental cache is just where rendered shells/data live. Appendix D specced **R2** for that store and called it "free tier," but R2 requires **linking a payment method** to the Cloudflare account even within free limits — which breaks "free to host," especially for anyone self-deploying this open-source repo. KV is part of the Workers Free plan (no card), and its limits (100k reads/day, 1k writes/day) are ample for ~1,000 low-frequency reps once OpenNext's in-region cache absorbs repeat reads. Tag cache stays **D1** and the queue stays a **Durable Object** — both free, no card. Verified: with KV + D1 + DO the post-stale-window requests serve in ~15 ms with zero hangs (WORKLOG 2026-07-14, hang incident). Flipping back to R2 is a 3-line change in `open-next.config.ts` + the `r2_buckets` block. R2 re-enters only at Phase 5, for the archival valve (§8), where linking a card is a smaller, later ask. | R2's card requirement conflicts with the free-to-host goal; the queue (the real fix) is backend-agnostic, so KV costs nothing in correctness and keeps the zero-card promise. |
+| 16 | ~~**Incremental cache backend: Workers KV, not R2 (2026-07-14).**~~ **— SUPERSEDED BY #17 (the whole OpenNext caching stack is deleted); its zero-card principle survives and is honoured by the Upstash choice in #17b.** Kept for the record. The OpenNext caching stack is REQUIRED for correctness, not just efficiency: deployed without it the Worker **deadlocked** on prerendered-shell revalidation (stale shells trigger a background `waitUntil` revalidation that hangs forever with no queue → runtime kills the request → error 1101). The Durable-Object revalidation **queue** is the actual fix; the incremental cache is just where rendered shells/data live. Appendix D specced **R2** for that store and called it "free tier," but R2 requires **linking a payment method** to the Cloudflare account even within free limits — which breaks "free to host," especially for anyone self-deploying this open-source repo. KV is part of the Workers Free plan (no card), and its limits (100k reads/day, 1k writes/day) are ample for ~1,000 low-frequency reps once OpenNext's in-region cache absorbs repeat reads. Tag cache stays **D1** and the queue stays a **Durable Object** — both free, no card. Verified: with KV + D1 + DO the post-stale-window requests serve in ~15 ms with zero hangs (WORKLOG 2026-07-14, hang incident). Flipping back to R2 is a 3-line change in `open-next.config.ts` + the `r2_buckets` block. R2 re-enters only at Phase 5, for the archival valve (§8), where linking a card is a smaller, later ask. | R2's card requirement conflicts with the free-to-host goal; the queue (the real fix) is backend-agnostic, so KV costs nothing in correctness and keeps the zero-card promise. |
+
+| 17 | **Hosting: Vercel-native Next.js (2026-07-24, Dean's call). Supersedes #1 and #16, and rewrites Appendix D.** (a) Cloudflare Workers / `@opennextjs/cloudflare` / `wrangler` are removed entirely; the app deploys to Vercel from the GitHub repo (previews per branch, production on `main`). The whole OpenNext caching stack (KV incremental cache + D1 tag cache + Durable Object queue) is **deleted, not reconfigured** — on Vercel, PPR, `use cache`, `revalidateTag` and ISR are first-party, so neither production incident in WORKLOG 2026-07-14 can recur. (b) **S2 rate limiting moves to Upstash Redis** (`@upstash/ratelimit`, fixed window + ephemeral cache) — the Workers rate-limit binding has no Vercel equivalent, and the in-memory fallback that shipped alongside it is worthless on per-instance serverless. Free tier: 256 MB / 500K commands per month, **no payment method** — so #16's zero-card promise survives, for us and for self-deployers. Side effect: the per-endpoint limits in §5 (30/20/10 per device) are now genuinely applied; under the Cloudflare binding all three endpoints shared `RL_CONDITIONS` and its wrangler-declared 60/60s, so those numbers had never actually run. (c) **`src/lib/reads.ts` moves from `use cache` to `'use cache: remote'`.** Verified against the installed Next 16.2.10 docs and Vercel's runtime-cache docs: plain `use cache` is a per-instance **in-memory** LRU. On Cloudflare the OpenNext KV override made it durable; on Vercel it would not be, which would break §3 twice over — every cold instance becomes a real Neon query, and `revalidateTag` would bust only the writing instance, so one rep's flag would not appear on another rep's device. `'use cache: remote'` uses Vercel's Runtime Cache: shared across instances, honours `cacheTag`/`revalidateTag`. (d) Runtime Cache is **regional**, so functions are pinned to `iad1` in `vercel.json` — one cache, and colocated with Neon per #13. (e) Analytics: Cloudflare Web Analytics → **Vercel Web Analytics**, which on Pro includes **zero** events and bills $0.03/1K (≈$3–4/mo at expected volume) — it is not free, contrary to the migration handoff. §8's archival Cron Trigger becomes a **Vercel Cron Job**. Both stay Phase 5. | Every hard production bug this project hit was Cloudflare-adapter-specific (WORKLOG 2026-07-14, both incidents), and Dean works in Vercel daily on a Pro plan he already owns. The app was ~90% platform-agnostic, so this is a subtraction. The one thing the platform does not hand back for free is shared mutable state, which is exactly why (b) and (c) are required work rather than deletions. |
+
+| 18 | **Privacy scope ruled explicitly (2026-07-24, Dean).** No IP is persisted for anyone — Better Auth's default IP capture is switched off via `advanced.ipAddress.disableIpTracking` and guarded by `tests/s10-invariants.test.ts`. But the standard is **privacy-conscious, not privacy-maximal**: the ~5 CMS users sign in with an email and are therefore inherently somewhat traceable, which is accepted, so `session.user_agent` stays. The invariant that actually matters is that the ~1,000 field reps remain anonymous. | The reps are the reason the app is loginless; anonymity for them is a product promise, not a nicety. Elevated privilege comes with some traceability and there is no way around that. Contorting the code to fight a library for the last increment of privacy on five authenticated staff accounts costs maintainability and buys nothing — and collecting anything without a reason is the opposite error. Dean's call, recorded so no future session re-litigates it in either direction. |
+
+| 19 | **Icon glyphs: aperture and shutter redrawn (2026-07-24, Dean's design review).** Aperture is now a true iris diaphragm — six blades closing on a hexagonal opening, geometry computed rather than eyeballed. Shutter is an orthographic short, wide cylinder (the shutter drum) with blade-seam ticks, replacing leaf-blades-on-a-circle. | The originals failed at 24px: the old aperture read as a bicycle wheel, and the old shutter was the same circle as the aperture with fewer lines, so the two were indistinguishable at icon size. The rest of the Phase 1 design system was approved unchanged in the same review. |
 
 Unchanged and reaffirmed: the four-concept data model (catalog / planogram / condition / round), overrides-not-copies store layouts (now doing double duty as the per-store layout, §1 #15), stable `position_id` keying, CMS before survey, Drizzle + Neon HTTP driver, Zod everywhere, IndexedDB write queue, hand-rolled SVG sprite, no AI, no personal data, no cookies.
 
@@ -42,20 +48,20 @@ Unchanged and reaffirmed: the four-concept data model (catalog / planogram / con
 | Layer | Choice | Notes |
 |---|---|---|
 | Framework | **Next.js 16**, App Router, TS `strict` | ⚠️ Next 16 post-dates most training data. Read `node_modules/next/dist/docs/` before writing framework code. |
-| Hosting | **Cloudflare Workers** via `@opennextjs/cloudflare` | Node runtime (not edge). Deploy via Cloudflare Workers Builds (free git-integrated CI/CD). |
+| Hosting | **Vercel** (native Next.js — §1 #17) | No adapter. Git-integrated: previews per branch, production on `main`. Functions pinned to `iad1` in `vercel.json`, next to Neon. |
 | DB | **Postgres on Neon**, free plan, region `aws-us-east-1` | Access via `@neondatabase/serverless` HTTP driver — no pool exhaustion under serverless. |
 | ORM | **Drizzle** (`drizzle-orm/neon-http`) | Schema in Appendix A. Never interpolate user input into `sql.raw`. |
 | Auth (CMS only) | **Better Auth** (§1 item 14), Resend magic link via `sendMagicLink`, `disableSignUp: true` allowlist | Appendix C. Survey is loginless. |
 | Styling | **Tailwind v4 `@theme`** | One token file. No SCSS in v2 — v1's three-palette drift came from mixing systems. |
 | Validation | **Zod 4** | Shared contracts in Appendix B; server always re-validates. |
 | Local cache/queue | **IndexedDB** via `idb-keyval` | Spec in §6 + Appendix E. |
-| Caching | Next tag-based data cache on OpenNext (R2 incremental cache + D1 tag cache + DO revalidation queue) | Spec in §5, config in Appendix D. All bindings have free tiers (verified 2026-07). |
-| Rate limiting | Workers rate-limit binding + in-app checks | Spec in §7. |
-| Analytics | **Cloudflare Web Analytics** | Free, cookieless. |
+| Caching | Next tag-based data cache, native on Vercel — **`'use cache: remote'`** + `cacheTag`/`revalidateTag` | Spec in §3/§5, details in Appendix D. Plain `use cache` is per-instance in-memory and does NOT satisfy §3 (§1 #17c). |
+| Rate limiting | **Upstash Redis** via `@upstash/ratelimit` (fixed window + ephemeral cache) | Spec in §7 S2, config in Appendix D. Free tier, no card. |
+| Analytics | **Vercel Web Analytics** (Phase 5) | Cookieless. Pro includes 0 events; $0.03/1K thereafter (§1 #17e). |
 | Email | **Resend** free tier (100/day) | Magic links only; ~10/week actual. |
 | Tests | **Vitest** (logic) + **Playwright** (2 public E2E flows) | §10. |
 | Icons | Hand-rolled SVG sprite | No icon library. |
-| Tooling | npm · Node 22 LTS+ · ESLint + Prettier · GitHub Actions (checks) | Boring on purpose. |
+| Tooling | **npm** (never pnpm/yarn — `package-lock.json` is the lockfile CI and Vercel use) · **Node 24** (Active LTS; 22 went to maintenance 2025-10-21) · ESLint + Prettier · GitHub Actions (checks) | Boring on purpose. |
 
 ---
 
@@ -65,7 +71,7 @@ The single most important architectural rule in this app:
 
 ```
                  ┌────────────────────────────────────────────┐
-   READS         │  Cloudflare CDN / Next data cache (tagged) │   ~all traffic
+   READS         │  Vercel CDN / runtime cache (tagged)       │   ~all traffic
    ──────────►   │  tags: catalog · store:<n> · rounds:<n>    │   0 DB queries
                  └────────────────────────────────────────────┘
                         ▲ revalidateTag(...) busts exactly one tag
@@ -196,34 +202,34 @@ Numbered so phases can reference them. S1–S6 ship **in Phase 3 with the endpoi
 | # | Control | Detail |
 |---|---|---|
 | S1 | Input contracts | Zod on every route handler and server action (Appendix B). Body size cap 32 KB. `note` ≤ 280 chars, `flags` ≤ 8 per position and validated against the `flags` table, `items` ≤ 64, store/fixture/position existence checked against the DB. |
-| S2 | Rate limiting | Workers rate-limit binding (Appendix D), keyed twice per request: `d:<deviceHash>` and `i:<ip>`. Limits per §5. The binding's counters are ephemeral (per-colo, 60 s windows) — **no IP is ever written to storage**, keeping the no-personal-data promise. Binding unavailable ⇒ requests still pass S1 + S5; the app degrades safe, not open. |
+| S2 | Rate limiting | **Upstash Redis** via `@upstash/ratelimit` (Appendix D; §1 #17b), keyed twice per request: `d:<deviceHash>` and `i:<ip>`. Limits per §5, and unlike the Cloudflare binding they replace, those per-endpoint numbers are actually applied. Counters are fixed-window Redis keys that expire with the window — **no IP is ever written to storage**, keeping the no-personal-data promise. Upstash unreachable or unconfigured ⇒ requests still pass S1 + S5; the app degrades safe, not open. A process-local `ephemeralCache` rejects already-blocked keys at zero Redis commands. |
 | S3 | Magic-link allowlist | `signIn` callback rejects any email without a `users` row (Appendix C). Nobody self-registers. Emails compared lowercase. |
 | S4 | Authorization in the data layer | Every CMS server action re-checks: valid session → role → brand scope (editors may only touch rows whose `brand_id` ∈ their `user_brands`). Middleware only handles redirect-to-login UX. Precedent: CVE-2025-29927. |
 | S5 | Audit everything, including anonymous writes | Public writes log `actor = device_hash`; CMS writes log `actor = email`. `before`/`after` jsonb. The admin **revert** action (Phase 4) restores `before` into `conditions` and is itself audited. |
 | S6 | Idempotency + LWW | §4 calls 4 and 5. Integrity is a security property: replay must not duplicate, stale must not clobber. |
 | S7 | Security headers | CSP (self + CF analytics beacon), `frame-ancestors 'none'`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`. ~20 lines in `next.config.ts`. |
-| S8 | Open-source hygiene | Seed script contains only fictional planograms/stores — real layouts live exclusively in the DB. `.env.example` complete, `.env*` gitignored, secrets via `wrangler secret`. Dependabot + `npm audit` in CI. **Repo is public from the first commit (Phase 0) — this makes S8 unconditional from day one, not a Phase 6 gate.** Every commit, from the first, must satisfy it: no real store data, no secrets, ever. |
+| S8 | Open-source hygiene | Seed script contains only fictional planograms/stores — real layouts live exclusively in the DB. `.env.example` complete, `.env*` gitignored, secrets via Vercel project environment variables. Dependabot + `npm audit` in CI. **Repo is public from the first commit (Phase 0) — this makes S8 unconditional from day one, not a Phase 6 gate.** Every commit, from the first, must satisfy it: no real store data, no secrets, ever. |
 | S9 | Escalation seams (built, off) | Env-flag Turnstile on the two POST endpoints (free, cookieless); env-flag per-store URL suffixes. Turning either on is config, not code. Default: off — day-one UX stays frictionless. |
-| S10 | No raw IPs, no PII | Grep-able invariant: nothing persists IPs, emails (outside `users`), names, or locations. `device_hash` + store numbers only. |
+| S10 | No raw IPs, no PII | Grep-able invariant: nothing persists IPs, emails (outside the CMS user table), names, or locations. `device_hash` + store numbers only. Enforced by `tests/s10-invariants.test.ts`. **Scope, ruled by Dean 2026-07-24:** the line is drawn at *reps*, not at CMS users. The ~1,000 field reps are anonymous and must stay that way — that is the whole point. The ~5 people with elevated CMS privileges are inherently somewhat traceable (they sign in with an email; that cannot be engineered away), and Dean accepts that. So: no IP is stored for anyone (`disableIpTracking`, §1 #18), but Better Auth's `session.user_agent` on a CMS session is fine and stays. **Privacy-conscious is the bar, not privacy-maximal** — do not contort the code or fight libraries chasing the last increment, and do not collect anything without a reason either. |
 
 ---
 
 ## 8 · Free-tier budget (verified 2026-07)
 
-| Resource | Free limit | Expected (realistic worst case) | Verdict |
+Rebased onto Vercel 2026-07-24 (§1 #17). Vercel is a **paid Pro plan Dean already owns**, so "free to host" now means: the *self-deployable* parts stay card-free (Neon, Upstash, Resend), and the Vercel-side usage is small and predictable rather than zero.
+
+| Resource | Limit | Expected (realistic worst case) | Verdict |
 |---|---|---|---|
-| Workers requests | 100,000/day | ~3–5k/day at full adoption | 20–30× headroom |
-| Workers CPU | 10 ms/request | cached responses ~1–3 ms; SSR pages kept lean | OK — watch heaviest page in Phase 6 Lighthouse pass |
-| Neon storage | 0.5 GB, writes fail over | hot set < 300 MB/yr with snapshot dedup + archival | OK with S/archival discipline |
-| Neon compute | 100 CU-h/mo (≈400 awake-h @ 0.25 CU) | writes-only wakes ≪ 100 h | OK — *only because reads are cached* |
+| Vercel Function invocations | Pro: usage-based, absorbed by the monthly credit | ~3–5k/day at full adoption | OK — verify against the first invoice, not against this table |
+| Vercel Runtime Cache (`use cache: remote`) | Billed per read/write, regional rates; per-project storage cap with LRU eviction | ~1 read/request, writes only after a rep edit or CMS mutation | OK — this is the line item the migration ADDED; watch it in Observability → Runtime Cache |
+| Vercel Web Analytics (Phase 5) | Pro: **0 included**, $0.03/1K events | ~120k events/mo | ≈$3–4/mo — budget it, it is not free (§1 #17e) |
+| Neon storage | 0.5 GB, writes fail over | hot set < 300 MB/yr with snapshot dedup + archival | OK with archival discipline |
+| Neon compute | 100 CU-h/mo (≈400 awake-h @ 0.25 CU) | writes-only wakes ≪ 100 h | OK — *only because reads are cached, which now requires `use cache: remote`* |
 | Neon egress | 5 GB/mo, **compute suspends if exceeded** | < 1 GB (cache misses + writes) | OK — same caveat |
-| Durable Objects (free = SQLite-backed) | 100k req/day | revalidation queue traffic, tiny | OK |
-| D1 (tag cache) | 5M reads/day, 100k writes/day | ≤ 1 read/request | OK |
-| KV (incremental cache — §1 #16) | 100k reads/day, 1k writes/day, 1 GB | in-region cache absorbs repeat reads; writes only on rep edits | OK — no card required |
-| R2 (Phase 5 archival only — §1 #16) | 10 GB | round/audit archives, ≥12 mo old | Years of headroom; card linked at Phase 5 |
+| Upstash Redis (S2) | Free: 256 MB · 500K commands/mo · 10 GB bandwidth · **no card** | fixed window ≈2–3 commands per check × 2 checks per write ≈ 5/write ⇒ ~100k writes/mo inside free | OK — `ephemeralCache` makes repeat blocks cost 0 |
 | Resend | 100 emails/day | ~10 magic links/week | OK |
 
-**Growth valve** (Phase 5): a monthly Cron Trigger exports rounds + audit rows older than 12 months to R2 as JSONL and prunes them from Postgres. Steady-state hot set stays under half the Neon quota indefinitely. The valve is code from day one, so scale never becomes a migration.
+**Growth valve** (Phase 5): a monthly **Vercel Cron Job** exports rounds + audit rows older than 12 months to object storage as JSONL and prunes them from Postgres. Steady-state hot set stays under half the Neon quota indefinitely. The valve is code from day one, so scale never becomes a migration.
 
 ---
 
@@ -238,12 +244,12 @@ Every phase ends with its **Done when** list fully green. Do not start phase N+1
 - Dean completes the human setup checklist (§11) first — accounts can't be scripted.
 - Scaffold Next 16 + TS `strict` in `~/projects/rounds`. npm. ESLint + Prettier.
 - Copy `ROUNDS-PLAN.md` + `ROUNDS-PRIMER.md` into `docs/`. Write `CLAUDE.md` pointing at both, including the "Next 16 post-dates your training data — read `node_modules/next/dist/docs/`" warning.
-- `@opennextjs/cloudflare` + `wrangler.jsonc` with all bindings (Appendix D). Connect the repo to Cloudflare Workers Builds so `main` auto-deploys.
+- Connect the repo to Vercel so `main` auto-deploys and every branch gets a preview (Appendix D). *(Historical note: Phase 0 originally shipped `@opennextjs/cloudflare` + `wrangler.jsonc`; removed in §1 #17.)*
 - Neon project + Drizzle + full schema (Appendix A) as migration 0001 + seed script with **fictional** demo data (S8).
 - GitHub Actions: typecheck, lint, Vitest, build on every push. Dependabot on.
 - MIT `LICENSE`, `README` stub, complete `.env.example`.
 
-**Done when:** pushing to `main` auto-deploys a hello page to a `workers.dev` URL · CI is green · `npm run db:migrate && npm run db:seed` works from scratch · schema constraints verified by a Vitest suite that actually inserts rows (uniqueness, CHECKs, FK cascades).
+**Done when:** pushing to `main` auto-deploys a hello page to the project's Vercel URL · CI is green · `npm run db:migrate && npm run db:seed` works from scratch · schema constraints verified by a Vitest suite that actually inserts rows (uniqueness, CHECKs, FK cascades).
 
 ### Phase 1 — Design system (before any page)
 
@@ -274,7 +280,7 @@ Every phase ends with its **Done when** list fully green. Do not start phase N+1
 - Reads via the cached GETs (§5); writes via `POST /api/conditions`, `/api/layout`, `/api/stores`.
 - **S1, S2, S5, S6, S7 ship in this phase, same commits as the endpoints.**
 - Generate output + copy-to-clipboard.
-- Cloudflare Web Analytics snippet.
+- Vercel Web Analytics snippet (§1 #17e — deferred to Phase 5 with the rest of the analytics work).
 
 **Done when:** the public POST endpoints reject: unknown store (conditions/layout), unknown position, unknown flag, unknown/inactive product (layout), oversized note/body, stale `captured_at` (409 + current row) · store entry creates-once (re-entry is a no-op) · rate limit demonstrably trips (integration test with the binding stubbed) · anonymous writes appear in `audit_log` with `device_hash` · a full table walk works end-to-end on a phone.
 
@@ -291,16 +297,16 @@ Every phase ends with its **Done when** list fully green. Do not start phase N+1
 
 - IndexedDB cache-first render + write queue exactly per §6 / Appendix E.
 - Pending/rejected UI chip. Offline banner.
-- Monthly archival Cron Trigger → JSONL to R2 → prune (§8 growth valve).
+- Monthly **Vercel Cron Job** → JSONL to object storage → prune (§8 growth valve).
 
 **Done when:** airplane-mode walk of a full table, then reconnect ⇒ all writes land, in order, no duplicates (Playwright, network-throttled) · a poisoned queue op (400) surfaces visibly and doesn't block the queue · archival job tested against seeded old data.
 
 ### Phase 6 — Ship
 
 - a11y audit: full keyboard-only pass, screen-reader pass on the survey flow, contrast re-check.
-- Lighthouse ≥ 95 on survey routes; check heaviest SSR page against the 10 ms Workers CPU budget.
+- Lighthouse ≥ 95 on survey routes; check the heaviest SSR page against Vercel's function duration/Active-CPU billing rather than a hard per-request CPU ceiling.
 - Playwright E2E: (1) walk a table and flag a condition; (2) submit a round and see it in history.
-- `README.md`, `SETUP.md` (a stranger self-hosts in five minutes: Neon + Cloudflare + Resend from zero), `LICENSE`.
+- `README.md`, `SETUP.md` (a stranger self-hosts in five minutes: Neon + Vercel + Upstash + Resend from zero), `LICENSE`.
 - Final git-history audit (S8 has applied since commit one, so this is a confirmation pass, not a scrub-and-hope): grep full history for secrets and real store/planogram data.
 
 **Done when:** a fresh clone following SETUP.md alone reaches a working deploy · both E2E flows green in CI · git-history audit confirms no real store data or secrets were ever committed.
@@ -321,11 +327,14 @@ Accounts can't be scripted; everything else can. In order:
 
 1. Create the GitHub repo `rounds` (**public**, MIT-licensed from the start — S8 hygiene applies unconditionally, so there's no private-build phase) and the local folder `~/projects/rounds`; connect that folder to the agent session.
 2. **Neon**: create a free project named `rounds`, region `aws-us-east-1`. Copy the connection string into `.env.local` (`DATABASE_URL`).
-3. **Cloudflare**: free account. Enable Workers + R2 (R2 activation may ask for a card; the tiers used here bill $0). Connect the GitHub repo to Workers Builds when the agent has the config ready.
-4. **Resend**: free account. For development the default onboarding sender works; before Phase 6, verify a real sending domain.
-5. Hand the agent `ROUNDS-PRIMER.md` (paste it or have it read `docs/`) and say go.
+3. **Vercel** (§1 #17): connect the GitHub repo to a Vercel project. Set the environment variables below for Production and Preview. Confirm Settings → Functions region is `iad1` (`vercel.json` pins it; the dashboard should agree).
+4. **Upstash** (§1 #17b): create a free Redis database in `us-east-1`. No card. Copy `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. The Vercel Marketplace integration sets both automatically if you'd rather not paste them.
+5. **Resend**: free account. For development the default onboarding sender works; before Phase 6, verify a real sending domain.
+6. Hand the agent `ROUNDS-PRIMER.md` (paste it or have it read `docs/`) and say go.
 
-Secrets inventory (complete): `DATABASE_URL`, `AUTH_SECRET`, `AUTH_RESEND_KEY`, `AUTH_EMAIL_FROM`. Feature flags (default off): `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`, `STORE_SLUG_MODE`.
+Secrets inventory (complete): `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. Feature flags (default off): `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`, `STORE_SLUG_MODE`.
+
+> `BETTER_AUTH_SECRET` is required for the **build**, not just for login: Better Auth initialises at module load, so a build without it crashes even though the survey is loginless.
 
 ---
 
@@ -338,6 +347,10 @@ Secrets inventory (complete): `DATABASE_URL`, `AUTH_SECRET`, `AUTH_RESEND_KEY`, 
 ---
 
 ## Appendix A · Drizzle schema (authoritative)
+
+**Resynced 2026-07-24** — this appendix had drifted from `src/db/schema.ts` since 2026-07-14 (the §1 #15 realignment widened `sections.key`, and Phase 2 moved the auth tables out). The block below is now a verbatim copy of `src/db/schema.ts`. That file is the source of truth; this is the mirror. If you change one, change the other in the same commit — a future session reading a stale appendix will build against a schema that does not exist.
+
+Better Auth's own tables (`user`, `session`, `account`, `verification`) plus `user_brands` live in `src/db/auth-schema.ts`, not here — see Appendix C and the note at the bottom of this file.
 
 Verify exact Drizzle API names against the installed version; the *shapes, constraints, and indexes* below are locked. CHECK constraints noted in comments go in the migration SQL.
 
@@ -363,7 +376,6 @@ import { sql } from 'drizzle-orm'
 export const productKind = pgEnum('product_kind', ['camera', 'lens', 'accessory', 'tablet', 'display'])
 export const layoutKind  = pgEnum('layout_kind', ['endcap', 'plain'])
 export const surfaceKind = pgEnum('surface_kind', ['gray', 'wood'])
-export const sectionKey  = pgEnum('section_key', ['endcap', 'right', 'left', 'lens'])
 export const userRole    = pgEnum('user_role', ['admin', 'editor'])
 
 // ── CATALOG ──────────────────────────────────────────────────────────────
@@ -414,13 +426,18 @@ export const fixtureBrands = pgTable('fixture_brands', {
   brandId:   integer('brand_id').notNull().references(() => brands.id),
 }, (t) => [primaryKey({ columns: [t.fixtureId, t.brandId] })])
 
+// key is '<side>-<n>' ('left-1', 'right-2', 'end-1') — the fixed floor
+// geometry (plan §1 #15) lives in src/lib/floor.ts and is seeded 1:1 here.
 export const sections = pgTable('sections', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),
   fixtureId: integer('fixture_id').notNull().references(() => fixtures.id),
-  key:       sectionKey('key').notNull(),
+  key:       text('key').notNull(),
   label:     text('label').notNull(),
   sort:      smallint('sort').notNull().default(0),
-}, (t) => [uniqueIndex('sections_fixture_key_idx').on(t.fixtureId, t.key)])
+}, (t) => [
+  uniqueIndex('sections_fixture_key_idx').on(t.fixtureId, t.key),
+  check('sections_key_format', sql`${t.key} ~ '^[a-z]+-[0-9]$'`),
+])
 
 export const positions = pgTable('positions', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),
@@ -495,27 +512,13 @@ export const roundItems = pgTable('round_items', {
   check('round_items_note_length', sql`char_length(${t.note}) <= 280`),
 ])
 
-// ── USERS (CMS auth — Better Auth, decided 2026-07-13; see docs/WORKLOG.md) ─
-// Better Auth's own tables (accounts/sessions/verification) are generated
-// by `npx @better-auth/cli generate` in Phase 2, once the auth config
-// exists — they intentionally are NOT hand-written here to avoid drifting
-// from what the library actually expects. This table is OURS: it is the
-// row Better Auth's user table extends with a role + brand scope, and it's
-// what user_brands and audit_log.actor (email) reference.
-export const users = pgTable('users', {
-  id:            text('id').primaryKey(),
-  name:          text('name'),
-  email:         text('email').notNull().unique(), // stored lowercase
-  emailVerified: boolean('email_verified').notNull().default(false),
-  role:          userRole('role').notNull().default('editor'),
-  createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt:     timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
-
-export const userBrands = pgTable('user_brands', {
-  userId:  text('user_id').notNull().references(() => users.id),
-  brandId: integer('brand_id').notNull().references(() => brands.id),
-}, (t) => [primaryKey({ columns: [t.userId, t.brandId] })])
+// ── USERS (CMS auth) ────────────────────────────────────────────────────
+// The user/session/account/verification tables live in ./auth-schema.ts
+// (Better Auth owns them; `role` is added there as an additionalField).
+// user_brands (brand scoping, S4) also lives there, next to `user`, to keep
+// a single import direction (auth-schema imports from schema, never back).
+// The `userRole` enum above is shared by both files.
+// audit_log.actor is just text (email OR device_hash) — no FK to user.
 
 // ── AUDIT ────────────────────────────────────────────────────────────────
 export const auditLog = pgTable('audit_log', {
@@ -635,40 +638,55 @@ S4 still applies exactly as originally specified: middleware is not the security
 
 ---
 
-## Appendix D · Cloudflare / OpenNext configuration
+## Appendix D · Platform configuration (Vercel)
 
-Caching on the adapter needs three components (verified against the installed adapter, 2026-07); all Workers-Free-plan, **no payment method** (see §1 #16 — this is why KV, not R2):
+**Rewritten 2026-07-24 for §1 #17.** The previous version of this appendix specified the Cloudflare/OpenNext caching stack (KV incremental cache + D1 tag cache + Durable Object revalidation queue) and the Workers rate-limit binding. All of it is gone — deleted, not reconfigured. The historical record of why it existed lives in `docs/WORKLOG.md` (2026-07-14, both incidents) and in §1 #16; do not resurrect it here.
 
-| Component | Binding | Free tier |
+### What the platform gives us for free
+
+| Concern | On Vercel | Notes |
 |---|---|---|
-| Incremental cache (rendered pages/data) | **KV namespace** `NEXT_INC_CACHE_KV` (§1 #16) | 100k reads/day, 1k writes/day, 1 GB |
-| Tag cache (`revalidateTag`) | **D1 database** `NEXT_TAG_CACHE_D1` (`D1NextModeTagCache`) | 5M reads/day |
-| Revalidation queue **(the deadlock fix)** | **Durable Object** `NEXT_CACHE_DO_QUEUE` (SQLite-backed — required on free plan) | 100k req/day |
+| Adapter / build | none | Vercel detects Next.js. No `open-next.config.ts`, no `wrangler.jsonc`, no build-command tuning. |
+| PPR / streaming | first-party | The 2026-07-14 stream-corruption incident was an adapter bug and cannot recur. |
+| Revalidation | first-party | `revalidateTag` is native. No queue to provision; the 1101 deadlock cannot recur. |
+| ISR / CDN cache | first-party | Applies to prerendered routes. |
+| DDoS mitigation | free on all plans | Volumetric protection underneath S2. |
 
-The queue is load-bearing: without it, stale-shell revalidation hangs the Worker (error 1101). Deploy via `opennextjs-cloudflare deploy` (NOT bare `wrangler deploy`) so `populate-cache` creates the D1 `revalidations` table and seeds the cache first.
+### What we still have to provide
 
-`wrangler.jsonc` sketch (agent fills in real ids; exact shape from current OpenNext docs):
+**1. Runtime cache — the §3 guarantee.** Verified 2026-07-24 against the installed Next 16.2.10 docs (`node_modules/next/dist/docs/01-app/03-api-reference/01-directives/use-cache.md` and `use-cache-remote.md`) and Vercel's runtime-cache docs, quoting Vercel:
 
-```jsonc
+> `use cache` is in-memory by default. This means that it is ephemeral, and disappears when the instance that served the request is shut down. `use cache: remote` is a declarative way telling the system to store the cached output in a remote cache such [as] Vercel runtime cache.
+
+So `src/lib/reads.ts` uses **`'use cache: remote'`**, not `use cache`. Both properties §3 depends on — a cache shared across instances, and `revalidateTag` that reaches all of them — come only from the remote variant. Getting this wrong is silent: the app works perfectly and quietly bills Neon egress until the database suspends.
+
+Runtime Cache is **regional**, so `vercel.json` pins functions to `iad1`, which is also where Neon lives (§1 #13):
+
+```json
 {
-  "name": "rounds",
-  "compatibility_flags": ["nodejs_compat"],
-  "kv_namespaces": [{ "binding": "NEXT_INC_CACHE_KV", "id": "<from: wrangler kv namespace create>" }],   // §1 #16 (KV, not R2)
-  "d1_databases": [{ "binding": "NEXT_TAG_CACHE_D1", "database_name": "rounds-tags", "database_id": "<from: wrangler d1 create>" }],
-  "durable_objects": { "bindings": [{ "name": "NEXT_CACHE_DO_QUEUE", "class_name": "DOQueueHandler" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DOQueueHandler"] }],
-  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "rounds" }],
-  "ratelimits": [
-    { "name": "RL_CONDITIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
-    { "name": "RL_ROUNDS",     "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } }
-  ],
-  "triggers": { "crons": ["0 6 1 * *"] }   // monthly archival valve (§8)
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["iad1"]
 }
 ```
 
-Rate-limit binding facts to design around: periods are only 10 s or 60 s; counting is per-colo and eventually consistent (permissive). That's fine — S2 is a volume damper, not an accounting system; S1 + S5 + S9 carry the rest. Call it twice per request: once keyed `d:<deviceHash>`, once `i:<ip>` (IP read from the request, used for the check, never stored — S10).
+Self-hosters off Vercel supply their own remote handler via Next's `cacheHandlers` config — see `SETUP.md`.
 
-Deploys: Cloudflare Workers Builds watches the GitHub repo — `main` → production; PRs → preview URLs. GitHub Actions runs checks only (no deploy secrets in GitHub).
+**2. Rate limiting (S2) — Upstash Redis.** Vercel has no equivalent of the Workers rate-limit binding that is both card-free and device-keyable. Vercel's own WAF rate limiting is a *priced* feature on Pro, and its documented Pro counting keys are IP and JA4 only, so it cannot key on `device_hash`. Upstash's free tier is 256 MB / 500K commands per month with **no payment method**, which keeps §1 #16's zero-card promise for anyone self-deploying this repo.
+
+Design facts to build around, all reflected in `src/lib/rate-limit.ts`:
+
+- **Fixed window, not sliding.** 2–3 Redis commands per allowed check versus 4–5. S2 is a volume damper, not an accounting system (S1 + S5 + S9 carry the rest), so boundary accuracy buys nothing and costs quota.
+- **`ephemeralCache`** — a process-local map of blocked keys and reset times. An already-blocked caller costs **zero** Redis commands until their window rolls. That is precisely the abuse case.
+- **`analytics: false`** — it adds one `ZINCRBY` per call. Vercel Observability already shows the 429s.
+- **One limiter per distinct `(limit, windowSec)` pair**, so §5's per-endpoint numbers actually apply. Under the old Cloudflare binding all three endpoints shared `RL_CONDITIONS` and its wrangler-declared 60/60s; the 30/20/10 values in the handlers had never run.
+- **Called twice per request** — `d:<deviceHash>` and `i:<ip>`. The IP is read from `x-real-ip` / `x-forwarded-for` for the check and discarded (S10). `src/lib/client-ip.ts` is the only place it is read, and its return value must never reach anything but `rateLimit()`.
+- **Degrade safe, not open.** Unconfigured or unreachable ⇒ `true`. A survey a rep cannot submit to is worse than an unthrottled minute, and the endpoint is still fully validated (S1) and audited (S5).
+
+**3. Later phases.** The §8 archival valve becomes a **Vercel Cron Job** (Phase 5). Analytics becomes **Vercel Web Analytics** — note it is *not* free on Pro (§1 #17e). Turnstile (S9, off by default) becomes whichever captcha is Vercel-compatible at the time; it is a seam, not built.
+
+### Deploys
+
+Vercel watches the GitHub repo: `main` → production, every other branch → a preview URL. GitHub Actions runs checks only — no deploy secrets in GitHub. Environment variables are set per-environment in the Vercel project settings; see §11 and `.env.example` for the complete list.
 
 ---
 

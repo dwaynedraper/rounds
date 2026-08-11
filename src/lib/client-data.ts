@@ -6,13 +6,22 @@ import type { getCatalog, getStoreState } from "@/lib/reads";
 /* Client data layer for the survey (plan §6: local-cache-first).
  *
  * WHY the survey fetches from the client instead of server-rendering the
- * data: the Cloudflare adapter corrupts Next's PPR resume stream on
- * dynamic-param pages (WORKLOG 2026-07-14 — inline flight scripts get
+ * data: the Cloudflare adapter corrupted Next's PPR resume stream on
+ * dynamic-param pages (WORKLOG 2026-07-14 — inline flight scripts got
  * interleaved mid-chunk, leaking payload as visible text). Static pages and
- * single-phase JSON responses are unaffected, so the survey pages are
+ * single-phase JSON responses were unaffected, so the survey pages are
  * static client shells and ALL per-store data arrives through the §5 GET
- * endpoints, which sit on the same tagged `use cache` reads as before —
+ * endpoints, which sit on the same tagged `use cache: remote` reads as before —
  * the Neon budget rule (§3) is unchanged.
+ *
+ * ⚠️ THAT ORIGINAL REASON NO LONGER APPLIES. Since the move to Vercel-native
+ * (plan §1 #17) the adapter — and its bug — are gone, so this layer is now a
+ * choice, not a workaround. Reverting the survey pages to normal server
+ * components that read Next `params` and call the reads directly would be
+ * cleaner and would put the pages back on Vercel's ISR/CDN layer. That
+ * refactor is deliberately NOT part of the migration commit; it is an open
+ * decision for Dean. Until then this layer stays exactly as it is, and it
+ * works correctly on Vercel.
  *
  * Phase 5 replaces the module-level catalog memo with the IndexedDB cache
  * + write queue; the fetch surface stays identical.

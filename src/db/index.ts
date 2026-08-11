@@ -4,11 +4,11 @@
 // N queries on a page means N round trips, not N cheap pool checkouts.
 //
 // LAZY on purpose: the client is created on first use, NOT at import. This
-// matters because `next build` (and Cloudflare Workers Builds) evaluate
-// every route module at build time, where runtime secrets like DATABASE_URL
-// are deliberately absent. Throwing at import would fail the build; instead
-// we only require DATABASE_URL when a query actually runs (at request time,
-// where the Worker secret is present).
+// matters because `next build` (and the build step on any host, Vercel
+// included) evaluates every route module at build time, where runtime
+// secrets like DATABASE_URL may deliberately be absent. Throwing at import
+// would fail the build; instead we only require DATABASE_URL when a query
+// actually runs, at request time, where the env var is present.
 import { drizzle, type NeonHttpDatabase } from 'drizzle-orm/neon-http'
 import * as schema from './schema'
 import * as authSchema from './auth-schema'
@@ -18,10 +18,10 @@ type DB = NeonHttpDatabase<typeof fullSchema>
 
 let instance: DB | null = null
 
-// Only ever hit at BUILD time (Workers Builds has no runtime secrets). The
-// build accesses `db` to *construct* queries but never executes them (dynamic
-// pages defer to request time), so a placeholder here is never connected to.
-// At runtime the real DATABASE_URL secret is always present.
+// Only ever hit at BUILD time. The build accesses `db` to *construct*
+// queries but never executes them (dynamic pages defer to request time), so
+// a placeholder here is never connected to. At runtime the real
+// DATABASE_URL is always present.
 const BUILD_PLACEHOLDER = 'postgresql://build:build@localhost/placeholder'
 
 function resolve(): DB {

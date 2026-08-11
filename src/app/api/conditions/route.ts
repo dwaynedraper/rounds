@@ -3,18 +3,11 @@ import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { conditionWrite } from "@/lib/contracts";
 import { rateLimit } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 import { storeTag } from "@/lib/cache-tags";
 import { applyConditionWrite } from "@/lib/conditions";
 
 const MAX_BODY = 32 * 1024; // S1 body cap
-
-function clientIp(req: Request): string {
-  return (
-    req.headers.get("cf-connecting-ip") ||
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "0.0.0.0"
-  );
-}
 
 export async function POST(req: Request) {
   // S1 — body size cap
@@ -39,8 +32,8 @@ export async function POST(req: Request) {
 
   // S2 — rate limit by device AND by ip (ip used, never stored — S10)
   const ip = clientIp(req);
-  const okDevice = await rateLimit("RL_CONDITIONS", `d:${body.deviceHash}`, { limit: 30, windowSec: 60 });
-  const okIp = await rateLimit("RL_CONDITIONS", `i:${ip}`, { limit: 60, windowSec: 60 });
+  const okDevice = await rateLimit(`d:${body.deviceHash}`, { limit: 30, windowSec: 60 });
+  const okIp = await rateLimit(`i:${ip}`, { limit: 60, windowSec: 60 });
   if (!okDevice || !okIp) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });
   }

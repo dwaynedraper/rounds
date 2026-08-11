@@ -3,7 +3,7 @@ import { getStoreState } from "@/lib/reads";
 
 /* GET /api/stores/[number]/state (plan §5) — this store's layout
  * assignments + all living conditions in one document. Backed by the
- * `use cache` read (tag: store:<n>); writes revalidate that tag. */
+ * `use cache: remote` read (tag: store:<n>); writes revalidate that tag. */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ number: string }> },

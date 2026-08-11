@@ -4,6 +4,119 @@ Short, running log — date, what changed, what's next. Newest first. Read this 
 
 ---
 
+## 2026-07-24 — Post-break system audit + the work it turned up — ✅ verified
+
+Dean returned from a break and asked for a medium, non-adversarial audit: current state vs the plan, where git stands, tests and lints green. Audited `c1b5357` from a fresh GitHub clone. Full report delivered separately; this entry records what the audit **found** and what was **done about it**.
+
+### Baseline: healthy
+
+Gate green from a clean clone, exactly as CI runs it: typecheck ✓ · lint ✓ · db:migrate ✓ · 37/37 tests ✓ · `next build` ✓. `schema.ts` matches the committed migrations (`drizzle-kit generate`: nothing to migrate). No secrets or real store data anywhere in history (S8 holds). `main` clean at `5343be1` and had NOT absorbed the migration commits — the earlier "empty `main..HEAD`" scare was a false alarm.
+
+`format:check` fails on 89 files, but it fails on `main` too (88) and is not part of CI. Pre-existing Prettier drift, not a regression. Deliberately **not** fixed here: an 89-file reformat during an open migration PR buries the real diff. Do it as a standalone commit after the merge.
+
+### Finding 1 — nine Next.js advisories (fixed)
+
+`next@16.2.10` carried nine published advisories, 4 high, all range `>=16.0.0 <16.2.11`. The 2026-07-14 audit had recorded two moderates; this changed because time passed.
+
+Four never applied here — no `middleware.ts` (S4 puts authorization in the data layer, which is exactly why), no custom server, no rewrites, no `next/image`. Three did, and the one weighted heaviest is **cache confusion of response bodies**, in an app whose entire free-tier budget rests on cached responses (§3).
+
+Went to **16.3.0**, not the minimum 16.2.11: still non-major, and it additionally clears the transitive `postcss` (4 advisories including sourceMappingURL path traversal) and `sharp`/libvips highs that 16.2.x carries. `npm audit fix` cleared the last `nanoid` high. **4 high + 5 moderate → 0 high, 5 moderate.** The remainder is the esbuild dev-server chain via `drizzle-kit`; npm's fix is a *major* downgrade to drizzle-kit 0.18.1, which is worse than the problem — left alone knowingly.
+
+Also took Dependabot's minor/patch group (react 19.2.8, better-auth 1.6.27, resend 6.19.0, @playwright/test 1.62.1) so its open PR rebases to near-empty. Did **not** take `@opennextjs/cloudflare` 1.20.2 from it — that package no longer exists here. Re-pinned the framework quartet exactly after `npm install` rewrote them to caret ranges.
+
+### Finding 2 — S10 was being violated in production code (fixed)
+
+**Better Auth writes the client IP into `session.ip_address` by default.** It had been doing so since Phase 2. Plan S10 and §1 #6 say "No raw IPs stored, anywhere, ever" and call it a *grep-able invariant* — but nothing was grepping, so it went unnoticed for ten days.
+
+Fixed with `advanced.ipAddress.disableIpTracking: true`, verified against the installed package rather than memory: `@better-auth/core/dist/utils/ip.mjs:202` short-circuits `getIp()` to null, and `internal-adapter.mjs:191` then writes `""`. No address reaches Postgres. The column is kept rather than dropped — removing it means a migration plus a hand-modeled divergence from the schema Better Auth expects, for no additional privacy, since it is already always empty.
+
+**Knowingly not fixed:** `session.user_agent` is still recorded. Not in S10's enumeration (IPs, emails outside `users`, names, locations), covers ~5 authenticated CMS users rather than ~1,000 anonymous reps, and suppressing it means fighting the library. Recorded here so the next session decides deliberately rather than discovering it.
+
+Added `tests/s10-invariants.test.ts` — 5 tests, no DB, no network — to make "grep-able invariant" literal: the config flag is present; IP headers are read in exactly one module; in all three write handlers `ip` appears exactly twice in code (declaration + limiter key) so it cannot leak into a log, response body, audit row or DB write; our tables declare no ip column; `audit.ts` never touches an address. **Confirmed the guards fail when a violation is injected**, not merely that they pass today. Tests 37 → 42.
+
+### Finding 3 — plan Appendix A had drifted (fixed)
+
+Out of sync with `src/db/schema.ts` since 2026-07-14, in two places: `sections.key` (plan still showed the `sectionKey` pgEnum; code has text + a CHECK, per §1 #15f) and `users`/`user_brands` (plan still hand-wrote them; Phase 2 moved them to `auth-schema.ts`). Both are correct decisions that never made it back into the plan.
+
+`schema.ts` declares itself the source of truth for that appendix and says the two "must never drift." Appendix A is now a byte-identical copy with a preamble saying which file wins. No code change.
+
+### Phase 1 unblock
+
+Rendered `/kitchen-sink` (light + dark) and the survey keypad at 402px phone width against the real production build, and sent the images to Dean. Phase 1 has been stalled on his design feedback since 2026-07-14, and the design system propagates into every screen built after it — this removes "I'd have to run it locally" as a reason to keep deferring.
+
+### Still blocked on Dean (cannot be done from a sandbox)
+
+Open the PR (CI has never run on this branch; `main`'s protection needs that `checks` status) · Vercel + Upstash setup — **until `UPSTASH_REDIS_REST_URL`/`_TOKEN` exist, S2 is inert and the loginless write endpoints have no abuse damper** · confirm Neon is migrated + seeded · verify the remote cache works cross-device on a preview · fast-forward `develop` to `main` · Phase 1 design feedback.
+
+---
+
+## 2026-07-24 — Node 22 → 24, and the toolchain footguns that cost Dean an hour — ✅ verified
+
+**Node 24 everywhere.** `.nvmrc`, `.node-version`, CI's `setup-node`, and a new `engines.node: "24.x"` in `package.json`. Reasons, verified against the Node release schedule and Vercel's docs on 2026-07-24: **Node 22 entered maintenance LTS on 2025-10-21** (EOL 2027-04-30) while **24 has been Active LTS since 2025-10-28** (maintenance 2026-10-20, EOL 2028-04-30), and **Vercel's default for new projects is already 24.x** (22.x and 20.x also available). Dean's other ~20 projects are on 24, so pinning this one to 22 was friction with no upside.
+
+`engines.node` overrides the Vercel project setting, so the version is declared in the repo rather than in a dashboard nobody remembers to check. Verified green on Node 24.18.0 in the sandbox from a clean clone: typecheck ✓ · lint ✓ · 37/37 tests ✓ · `next build` ✓.
+
+**Answering the question directly, since it comes up:** `.nvmrc` was *already* the per-repo mechanism — `nvm use` in this directory switches that shell only and never touches the global default. The pin was moved to 24 because 24 is the better pin, not because per-repo pinning didn't work.
+
+**Two footguns documented in SETUP.md, both of which actually bit.**
+
+1. **`SETUP.md` gave Linux-only Postgres instructions.** On macOS, Homebrew's Postgres creates a superuser named after your macOS account, not `postgres` — but `tests/db-test-client.ts` defaults to connecting as `postgres` (matching CI's container). Result: `role "postgres" does not exist`, SQLSTATE 28000, all three DB-backed suites red while the rate-limiter suite passes. Now has both macOS and Linux setup blocks, plus the symptom spelled out so the next person recognises it.
+2. **npm only.** Running `pnpm install`/`pnpm dev` in this repo moves every npm-installed package into `node_modules/.ignored`; interrupt it and `tsc`, `vitest` and `next` all become "command not found". Worse, a pnpm tree is not what CI (`npm ci`) or Vercel build, so anything verified under it proves nothing. Recovery is `rm -rf node_modules pnpm-lock.yaml && npm ci`. Called out in SETUP.md prerequisites and in plan §2's tooling row.
+
+Deliberately did NOT add a `packageManager` field to pin npm via corepack: Node 24 bundles npm 11, and pinning an exact npm version there would force a downgrade and drag corepack into the build. The lockfile plus the documented rule is enough.
+
+---
+
+## 2026-07-24 — Migrated off Cloudflare to Vercel-native (plan §1 #17) — 🚧 built + verified in sandbox, needs Dean's Vercel/Upstash setup
+
+**Why:** every hard production bug this project hit was Cloudflare-adapter-specific (both 2026-07-14 incidents below). Dean owns Vercel Pro and works in it daily. On Vercel, PPR / `use cache` / `revalidateTag` / ISR are first-party, so neither incident can recur, and the entire OpenNext caching stack is **deleted, not reconfigured**. Full decision record: plan §1 amendment #17, which supersedes #1, #9 and #16 and rewrote Appendix D.
+
+### Two corrections to the migration handoff doc, found before writing any code
+
+1. **PR #13 was already merged.** `main` is at `5343be1 Merge pull request #13 from dwaynedraper/develop`; `develop` was 2 commits *behind* `main`, not ahead. The handoff's "close PR #13 without merging" was stale. This branch is cut from `main`.
+2. **"Caching should mostly just work" was wrong, and it was the load-bearing item.** Verified against the installed Next 16.2.10 docs (`node_modules/next/dist/docs/01-app/03-api-reference/01-directives/use-cache.md`, `use-cache-remote.md`) and Vercel's runtime-cache docs: plain **`use cache` is a per-instance in-memory LRU**. On Cloudflare that was invisible because the OpenNext `kvIncrementalCache` override made the default handler durable (KV). On Vercel there is no such override, so `reads.ts` as written would have broken plan §3 in two ways at once — every cold function instance becomes a real Neon query (§8's egress limit **suspends the database** when exceeded), and `revalidateTag` would bust only the instance that handled the write, so a flag saved on one rep's phone would not appear on another's. Fixed by moving both reads to **`'use cache: remote'`**, which uses Vercel's Runtime Cache: shared across instances, honours `cacheTag`/`revalidateTag`. This is a *silent* failure mode — the app looks perfect while the bill climbs — so it is called out in AGENTS.md, the primer, SETUP.md and Appendix D.
+
+### What changed
+
+**Deleted:** `open-next.config.ts`, `wrangler.jsonc`, the four `cf:*` npm scripts, `@opennextjs/cloudflare` + `wrangler` devDependencies, the `initOpenNextCloudflareForDev()` hook in `next.config.ts`, and the Cloudflare `.gitignore` entries. Zero Cloudflare packages remain in `node_modules`.
+
+**S2 rate limiting → Upstash Redis** (Dean's call from three costed options). `src/lib/rate-limit.ts` rewritten on `@upstash/ratelimit` + `@upstash/redis`. Fixed window (2–3 Redis commands per check, vs 4–5 sliding) + `ephemeralCache` (already-blocked keys cost **zero** commands) + `analytics: false`. Free tier is 256 MB / 500K commands per month with **no card**, which preserves §1 #16's zero-card promise for self-deployers; at ~5 commands per write that's ~100k writes/month inside free. Same "degrade safe, not open" posture: unconfigured or unreachable ⇒ the write proceeds under S1 + S5.
+
+Why the alternatives lost: Vercel's WAF rate limiting is a *priced* feature on Pro, and its documented Pro counting keys are IP and JA4 only — it cannot key on `device_hash` — and self-hosters of this public repo could not use it at all.
+
+**Side effect worth knowing: the per-endpoint limits in plan §5 are now real for the first time.** On Cloudflare all three write endpoints called the single `RL_CONDITIONS` binding, whose limit lived in `wrangler.jsonc` at 60/60s, so the 30 / 20 / 10 values in the handlers were never applied in production. `tests/rate-limit.test.ts` now guards this.
+
+**`clientIp()` extracted** from three duplicate copies into `src/lib/client-ip.ts`, reading `x-real-ip` / `x-forwarded-for` (was `cf-connecting-ip`). One place to audit for S10; its return value must never reach anything but `rateLimit()`.
+
+**`vercel.json`** pins functions to `iad1` — Vercel's Runtime Cache is regional, and Neon is `us-east-1` (§1 #13).
+
+**CSP** dropped the `static.cloudflareinsights.com` / `cloudflareinsights.com` hosts; no analytics beacon is wired in today.
+
+**Docs:** plan §1 #17 added (#1/#9/#16 struck through as superseded, #6/#13 amended), §2 stack table, §7 S2, §8 budget table rebased onto Vercel/Upstash pricing, §9 phases, §11 setup checklist, and Appendix D fully rewritten. AGENTS.md, primer, README, SETUP.md, `.env.example` updated.
+
+**Tests: 29 → 37.** New `tests/rate-limit.test.ts` (8 tests, Upstash stubbed, no network): the limit trips; device and ip are independent buckets; all five distinct §5 `(limit, window)` pairs reach the limiter; limiters are reused not rebuilt; unconfigured degrades safe; unreachable degrades safe; keys stay under the `rounds:rl` prefix. This satisfies plan §9 Phase 3's "rate limit demonstrably trips (integration test with the binding stubbed)" — which the Cloudflare implementation never actually had.
+
+**Verified in sandbox** (Node 22, fresh `npm ci`, local Postgres 16): typecheck ✓ · lint ✓ · 37/37 tests ✓ · `next build` ✓, with zero Cloudflare dependencies.
+
+### ⚠️ Dean's handoff — in order
+
+1. Apply the bundle to `~/projects/rounds`, review, push the branch, open a PR into `main`.
+2. **Upstash:** create a free Redis database in `us-east-1`. No card. Copy `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`. (The Vercel Marketplace integration sets both automatically if you prefer.)
+3. **Vercel:** import the repo. Set env vars for Production **and** Preview: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, and the two Upstash vars. Confirm the function region is `iad1`.
+4. Ship a preview and walk the survey on your phone against Neon: enter a store → tables → side → flag a camera.
+5. **Verify the cache actually works cross-device** — this is the whole point of correction #2. Flag a camera on your phone, then load the same store on a second device (or a private window) and confirm the flag appears. Then check Vercel → Observability → **Runtime Cache** for a non-trivial hit rate. A hit rate near zero means reads are still going to Neon.
+6. Disconnect Cloudflare Workers Builds from the repo so it stops building. The `rounds` Worker, the `rounds-inc-cache` KV namespace and the `rounds-tags` D1 database are now orphaned and can be deleted whenever.
+
+### Open decision, deliberately NOT in this change set
+
+The survey's client-fetch layer (`src/lib/client-data.ts`, `StoreShell`, `useSurveySegments`) exists only to dodge the Cloudflare PPR bug. That bug is gone. Reverting the survey pages to normal server components that read Next `params` and call the reads directly would be cleaner, better for SSR, and would put the pages back on Vercel's ISR/CDN layer — which would cut function invocations on top of the Neon savings. It works correctly as-is on Vercel, so this is an improvement, not a fix. Flagged in a comment at the top of `client-data.ts`. Dean's call, separate branch.
+
+### Also worth knowing (not blocking)
+
+Vercel Web Analytics on Pro includes **zero** events and bills $0.03/1K — roughly $3–4/month at expected volume. The migration handoff called it "included in Pro"; it isn't. Budgeted in §8. It's a Phase 5 item either way.
+
+---
+
 ## 2026-07-14 — Live incident #2: Worker deadlock (error 1101) on shell revalidation — ✅ fixed (caching stack, KV backend)
 
 **Symptom (Dean, live):** after the stream-corruption fix deployed, the survey pages threw **error 1101 "Worker threw exception"** intermittently. Cloudflare logs: `waitUntil() tasks did not complete within the allowed time` (warn) → `The Workers runtime canceled this request because it detected that your Worker's code had hung and would never generate a response` (error).

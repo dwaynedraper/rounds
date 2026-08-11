@@ -8,7 +8,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 Before doing anything else, read **`docs/ROUNDS-PRIMER.md`**, then **`docs/ROUNDS-PLAN.md`** in full. The plan is locked (with amendments logged in its §1) — architectural decisions are not up for debate. `docs/WORKLOG.md` has the current phase and what's next.
 
-Same "your training data may be stale" caution above applies to Tailwind v4, Better Auth, Zod 4, and `@opennextjs/cloudflare` — verify against the installed package, not memory, every time.
+Same "your training data may be stale" caution above applies to Tailwind v4, Better Auth, Zod 4, and `@upstash/ratelimit` — verify against the installed package, not memory, every time.
+
+**Hosting is Vercel, natively (plan §1 #17, 2026-07-24).** There is no Cloudflare, no OpenNext adapter, no `wrangler.jsonc`. If you find yourself reading about `@opennextjs/cloudflare` here, you are reading a stale doc. Two Vercel-specific facts that are easy to get wrong and silent when you do: the survey reads use **`'use cache: remote'`** (plain `use cache` is per-instance in-memory and breaks plan §3), and S2 rate limiting runs on **Upstash Redis**, not a platform binding.
 
 ## Session-start checklist
 

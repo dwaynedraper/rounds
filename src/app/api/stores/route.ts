@@ -3,18 +3,11 @@ import { revalidateTag } from "next/cache";
 import { db } from "@/db";
 import { storeEnter } from "@/lib/contracts";
 import { rateLimit } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 import { storeTag } from "@/lib/cache-tags";
 import { ensureStore } from "@/lib/stores";
 
 const MAX_BODY = 4 * 1024; // S1 — this payload is tiny
-
-function clientIp(req: Request): string {
-  return (
-    req.headers.get("cf-connecting-ip") ||
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "0.0.0.0"
-  );
-}
 
 // POST /api/stores — enter a store, auto-creating it if new (plan §1 #15b).
 export async function POST(req: Request) {
@@ -38,8 +31,8 @@ export async function POST(req: Request) {
 
   // S2 — creation is cheap to spam; keep the window tight. IP used, never stored (S10).
   const ip = clientIp(req);
-  const okDevice = await rateLimit("RL_CONDITIONS", `sd:${body.deviceHash}`, { limit: 10, windowSec: 60 });
-  const okIp = await rateLimit("RL_CONDITIONS", `si:${ip}`, { limit: 20, windowSec: 60 });
+  const okDevice = await rateLimit(`sd:${body.deviceHash}`, { limit: 10, windowSec: 60 });
+  const okIp = await rateLimit(`si:${ip}`, { limit: 20, windowSec: 60 });
   if (!okDevice || !okIp) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });
   }

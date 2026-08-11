@@ -9,9 +9,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
 
   // Plan S7 (security headers). Global and dependency-free, so it ships in
-  // Phase 0 rather than waiting for Phase 3. CSP allows Cloudflare Web
-  // Analytics' beacon (plan §1 item 9) — tighten the connect-src host once
-  // that script is actually wired in and its real beacon domain is known.
+  // Phase 0 rather than waiting for Phase 3. The analytics beacon hosts were
+  // Cloudflare Web Analytics' until the Vercel migration (§1 #17); no
+  // analytics script is wired in today, so the policy is plain self-only.
+  // When Vercel Analytics lands (§1 #17, Phase 5), add its script/connect
+  // hosts here and nowhere else.
   async headers() {
     return [
       {
@@ -21,8 +23,8 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' static.cloudflareinsights.com",
-              "connect-src 'self' cloudflareinsights.com",
+              "script-src 'self' 'unsafe-inline'",
+              "connect-src 'self'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data:",
               "frame-ancestors 'none'",
@@ -37,10 +39,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-// OpenNext (Cloudflare) dev hook — makes getCloudflareContext() work during
-// `next dev` so local dev sees the same bindings/env the Worker will at
-// runtime. Canonical per @opennextjs/cloudflare get-started; no-op for the
-// production build. Confirmed against the installed 1.20.1 package.
-import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-initOpenNextCloudflareForDev();
