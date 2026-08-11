@@ -26,22 +26,18 @@ There is **one** working branch. Everything below happens on `feature/vercel-nat
 
 ---
 
-## Step 1 — Apply the latest bundle
+## Step 1 — Apply the bundle
 
-Two bundles are outstanding. Download **both** from the chat if you have not already, then apply in this order. Filenames may have a `-1` suffix if your browser avoided a collision — use whatever `ls` actually shows.
+**Done, if `git log --oneline -1` already shows `docs: stop hardcoding a Postgres major`.** Skip to step 2.
+
+Otherwise: the bundle is written straight to `~/projects/rounds` over the desktop bridge, so there is no download to click. One file, `rounds-ALL-REMAINING.bundle`.
 
 ```bash
 cd ~/projects/rounds
 git checkout feature/vercel-native
-ls -lt *.bundle | head -3
-```
-
-Apply the older one first (`rounds-vercel-native.bundle`, the 5-commit one), then the newer (`rounds-catchup.bundle`):
-
-```bash
-git fetch ./rounds-vercel-native.bundle feature/vercel-native
-git reset --hard FETCH_HEAD
-git fetch ./rounds-catchup.bundle feature/vercel-native
+ls -l rounds-ALL-REMAINING.bundle          # must exist
+git bundle verify ./rounds-ALL-REMAINING.bundle
+git fetch ./rounds-ALL-REMAINING.bundle feature/vercel-native
 git reset --hard FETCH_HEAD
 ```
 
@@ -49,12 +45,18 @@ git reset --hard FETCH_HEAD
 
 ```bash
 cat .nvmrc                      # must print 24
-git log --oneline main..HEAD    # must list 9 commits
+git log --oneline main..HEAD    # must list 13 commits
 ```
 
-If `.nvmrc` still says 22, a bundle did not apply. Stop and say so.
+If `.nvmrc` still says 22, the fetch did not take. Stop and say so.
 
-> **Why `git fetch … && git reset --hard` instead of `git fetch bundle branch:branch`?** Git refuses to fetch directly into a branch you have checked out. Fetching to `FETCH_HEAD` and resetting sidesteps that. You have no local work on this branch to lose.
+Then clear the stale bundles so nothing misleads a later step:
+
+```bash
+rm -f rounds-vercel-native.bundle _sync*.bundle
+```
+
+> **Why `git fetch … && git reset --hard` rather than `git fetch bundle branch:branch`?** Git refuses to fetch directly into a branch you have checked out. Fetching to `FETCH_HEAD` and resetting sidesteps that. You have no local work on this branch to lose.
 
 ---
 
