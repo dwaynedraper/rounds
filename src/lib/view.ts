@@ -100,9 +100,24 @@ export function visibleSlotCount(section: SectionView): number {
 }
 
 /** Plain-text issue report (plan Phase 3: generate output + copy). Pure —
- *  runs wherever the views were built. */
+ *  runs wherever the views were built.
+ *
+ *  FORMAT (Dean, 2026-07-24 — plan §1 #20). One line per flagged camera:
+ *
+ *      Store 0148
+ *      Canon EOS R: missing, broken
+ *      Nikon Z30: alarm, missing — Loose from the mount, told MOD
+ *
+ *  Brand and quick name ONLY. The wall label and position number are
+ *  deliberately gone: whoever reads this is standing at the table and
+ *  identifies the camera by name, so "Nikon / Right wall #1 —" was noise
+ *  that pushed the useful part off the edge of a phone screen. The note,
+ *  when there is one, stays on the same line after an em dash — Dean's
+ *  call; one line per camera is the rule that makes the report scannable.
+ *
+ *  Cameras with no flags never appear. That is the point of the report. */
 export function buildReport(number: string, nickname: string | null, tables: TableView[]): string {
-  const lines = [`Store ${number}${nickname ? ` (${nickname})` : ""}`, ""];
+  const lines = [`Store ${number}${nickname ? ` (${nickname})` : ""}`];
   let any = false;
   for (const table of tables) {
     for (const side of table.sides) {
@@ -110,10 +125,12 @@ export function buildReport(number: string, nickname: string | null, tables: Tab
         const n = visibleSlotCount(section);
         for (let i = 0; i < n; i++) {
           const slot = section.slots[i];
-          if (!slot.name || slot.flags.length === 0) continue;
+          // `?.` guards a section shorter than its capacity; buildTableViews
+          // never emits one, but a crash here would eat a rep's whole walk.
+          if (!slot?.name || slot.flags.length === 0) continue;
           any = true;
           lines.push(
-            `${table.name} / ${side.label} #${i + 1} — ${slot.name}: ${slot.flags.join(", ")}${slot.note ? ` — ${slot.note}` : ""}`,
+            `${table.name} ${slot.name}: ${slot.flags.join(", ")}${slot.note ? ` — ${slot.note}` : ""}`,
           );
         }
       }
