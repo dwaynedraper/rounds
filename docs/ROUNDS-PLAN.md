@@ -39,6 +39,8 @@ Companion document: `ROUNDS-PRIMER.md` — the context brief for the implementin
 
 | 19 | **Icon glyphs: aperture and shutter redrawn (2026-07-24, Dean's design review).** Aperture is now a true iris diaphragm — six blades closing on a hexagonal opening, geometry computed rather than eyeballed. Shutter is an orthographic short, wide cylinder (the shutter drum) with blade-seam ticks, replacing leaf-blades-on-a-circle. | The originals failed at 24px: the old aperture read as a bicycle wheel, and the old shutter was the same circle as the aperture with fewer lines, so the two were indistinguishable at icon size. The rest of the Phase 1 design system was approved unchanged in the same review. |
 
+| 20 | **Product fields: only `brand` and `quick_name` are required (2026-07-24, Dean).** `long_name`, `model` and `sku` become nullable — useful when known, never a gate. A supplied SKU must still be exactly 7 digits (optional ≠ unvalidated), and `sku` stays UNIQUE because Postgres permits any number of NULLs in a unique index, so "SKU unknown" is not a collision. Migration `0003` (three `DROP NOT NULL`, no rewrite, no data loss). **Report format changed in the same breath:** the copy-report is now one line per flagged camera, `Brand QuickName: flags`, with the note after an em dash when there is one — wall labels and position numbers are gone. | Brand ties a camera to a table and quick name is what a rep reads while walking; those two are the job. Demanding a long name, a model code and a 7-digit SKU before a camera could exist meant a rep hit a wall mid-round over data they do not carry. On the report: `Nikon / Right wall #1 — Z30: alarm` pushed the useful part off a phone screen. Whoever reads the report is standing at the table and identifies the camera by name, so the location was noise. Dean's call on both, from the floor. |
+
 Unchanged and reaffirmed: the four-concept data model (catalog / planogram / condition / round), overrides-not-copies store layouts (now doing double duty as the per-store layout, §1 #15), stable `position_id` keying, CMS before survey, Drizzle + Neon HTTP driver, Zod everywhere, IndexedDB write queue, hand-rolled SVG sprite, no AI, no personal data, no cookies.
 
 ---
@@ -391,9 +393,15 @@ export const products = pgTable('products', {
   id:        integer('id').primaryKey().generatedAlwaysAsIdentity(),
   brandId:   integer('brand_id').notNull().references(() => brands.id),
   quickName: text('quick_name').notNull(),
-  longName:  text('long_name').notNull(),
-  model:     text('model').notNull(),
-  sku:       text('sku').notNull().unique(), // 7-digit BBY SKU
+  // Only brand_id + quick_name are REQUIRED (plan §1 #20, Dean 2026-07-24):
+  // brand ties the camera to a table, quick_name is what a rep reads while
+  // walking. The rest are useful when known and must never block getting a
+  // camera onto the floor plan.
+  longName:  text('long_name'),
+  model:     text('model'),
+  sku:       text('sku').unique(), // 7-digit BBY SKU when known; Postgres
+                                   // allows many NULLs in a unique index, so
+                                   // unknown SKUs do not collide.
   kind:      productKind('kind').notNull(),
   active:    boolean('active').notNull().default(true),
   meta:      jsonb('meta').notNull().default(sql`'{}'::jsonb`),
@@ -401,6 +409,9 @@ export const products = pgTable('products', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('products_brand_idx').on(t.brandId),
+  // NULL-safe by construction: a CHECK is violated only when it evaluates
+  // to FALSE, and `NULL ~ '...'` is NULL. An unknown SKU passes; a present
+  // one must still be exactly 7 digits.
   check('products_sku_format', sql`${t.sku} ~ '^[0-9]{7}$'`),
 ])
 
