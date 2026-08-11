@@ -29,25 +29,39 @@ export type IconName =
 
 // Each entry draws inside a 0 0 24 24 viewBox, fill:none, stroke:currentColor.
 const GLYPHS: Record<IconName, React.ReactNode> = {
-  // Aperture — the hero identity mark. Six blades inscribed in a circle.
+  // Aperture — the hero identity mark. A real iris diaphragm: six blades
+  // closing onto a hexagonal opening. Geometry is computed, not eyeballed —
+  // inner hexagon r=4 with a vertex at 12 o'clock, and each blade edge runs
+  // from its vertex out to the circle 60° around, which is what produces the
+  // pinwheel an actual iris makes. (Dean's note, 2026-07-24: the previous
+  // glyph was six unrelated chords and read as a bicycle wheel.)
   aperture: (
     <>
       <circle cx="12" cy="12" r="9" />
-      <path d="M12 3 L16.5 10.8" />
-      <path d="M20.8 14.5 L11.8 14.5" />
-      <path d="M16.3 21 L11.8 13.2" />
-      <path d="M12 21 L7.5 13.2" />
-      <path d="M3.2 9.5 L12.2 9.5" />
-      <path d="M7.7 3 L12.2 10.8" />
+      <path d="M12 8 L15.46 10 L15.46 14 L12 16 L8.54 14 L8.54 10 Z" />
+      <path d="M12 8 L19.79 7.5" />
+      <path d="M15.46 10 L19.79 16.5" />
+      <path d="M15.46 14 L12 21" />
+      <path d="M12 16 L4.21 16.5" />
+      <path d="M8.54 14 L4.21 7.5" />
+      <path d="M8.54 10 L12 3" />
     </>
   ),
-  // Shutter — leaf blades sweeping around a center.
+  // Shutter — an orthographic short, wide cylinder: the shutter drum, seen
+  // slightly from above so the top face reads as an ellipse. Vertical ticks
+  // on the barrel are the blade seams (and double as dial knurling). Chosen
+  // over leaf-blades-on-a-circle so it is instantly distinguishable from the
+  // aperture glyph above at 24px — the old one was the same circle with
+  // fewer lines. (Dean's direction, 2026-07-24.)
   shutter: (
     <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 3a9 9 0 0 1 7.8 4.5L12 12z" />
-      <path d="M19.8 16.5A9 9 0 0 1 12 21l0-9z" />
-      <path d="M4.2 16.5A9 9 0 0 1 4.2 7.5L12 12z" />
+      <ellipse cx="12" cy="7.5" rx="9" ry="3.5" />
+      <path d="M3 7.5v9" />
+      <path d="M21 7.5v9" />
+      <path d="M3 16.5a9 3.5 0 0 0 18 0" />
+      <path d="M7.5 10.6v6.9" />
+      <path d="M12 11v7.5" />
+      <path d="M16.5 10.6v6.9" />
     </>
   ),
   // Lens — concentric optic.
