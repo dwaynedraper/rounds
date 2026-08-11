@@ -48,7 +48,7 @@ export default async function ProductsPage() {
                     </td>
                     <td className="px-3 py-2 font-medium">{p.quickName}</td>
                     <td className="px-3 py-2 text-text-muted">{p.model}</td>
-                    <td className="tabular px-3 py-2">{p.sku}</td>
+                    <td className="tabular px-3 py-2">{p.sku ?? <span className="text-text-faint">—</span>}</td>
                     <td className="px-3 py-2 text-text-muted">{p.kind}</td>
                     <td className="px-3 py-2">
                       {p.active ? (

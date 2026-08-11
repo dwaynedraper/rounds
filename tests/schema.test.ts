@@ -72,6 +72,43 @@ describe('products', () => {
     ).resolves.toBeDefined()
   })
 
+  test('only brand + quick_name are required — long_name, model, sku may be NULL (plan §1 #20)', async () => {
+    const brand = await seedBrand()
+    // The minimum a rep's admin needs to get a camera onto the floor plan:
+    // a brand to tie it to a table, and the name they read while walking.
+    await expect(
+      testDb.insert(products).values({
+        brandId: brand.id, quickName: 'EOS R', kind: 'camera',
+      })
+    ).resolves.toBeDefined()
+  })
+
+  test('a NULL sku passes the 7-digit CHECK, and many NULLs do not collide', async () => {
+    const brand = await seedBrand()
+    // A CHECK is violated only when it evaluates to FALSE; `NULL ~ '...'`
+    // is NULL, so an unknown SKU is allowed through. And Postgres permits
+    // any number of NULLs in a unique index, so "SKU unknown" is not a
+    // uniqueness conflict — which is the whole reason sku can stay unique.
+    await expect(
+      testDb.insert(products).values({ brandId: brand.id, quickName: 'A', kind: 'camera' })
+    ).resolves.toBeDefined()
+    await expect(
+      testDb.insert(products).values({ brandId: brand.id, quickName: 'B', kind: 'camera' })
+    ).resolves.toBeDefined()
+    const rows = await testDb.select().from(products)
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r) => r.sku === null)).toBe(true)
+  })
+
+  test('a sku that IS supplied must still be exactly 7 digits', async () => {
+    const brand = await seedBrand()
+    // Optional does not mean unvalidated: a half-typed SKU looks
+    // authoritative and is worse than none at all.
+    await expect(
+      testDb.insert(products).values({ brandId: brand.id, quickName: 'A', sku: '123', kind: 'camera' })
+    ).rejects.toThrow()
+  })
+
   test('sku uniqueness is enforced', async () => {
     const brand = await seedBrand()
     await testDb.insert(products).values({
