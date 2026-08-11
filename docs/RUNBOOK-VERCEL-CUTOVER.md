@@ -76,7 +76,7 @@ npm run typecheck && npm run lint && npm run test && npm run build
 **Expected: 42 passing tests, clean build.** If the three DB suites fail with `role "postgres" does not exist`, run this once:
 
 ```bash
-brew services start postgresql@16
+brew services start postgresql@17   # or whichever major you have
 createuser -s postgres
 psql -d postgres -c "ALTER ROLE postgres WITH PASSWORD 'postgres';"
 createdb -O postgres rounds_test

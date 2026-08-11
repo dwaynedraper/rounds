@@ -31,7 +31,7 @@ The test client connects as role `postgres` to database `rounds_test` (that's wh
 **macOS (Homebrew).** Homebrew's Postgres creates a superuser named after your macOS account, *not* `postgres`, so you have to create that role once. If you skip this you get `role "postgres" does not exist` (SQLSTATE 28000) and all three DB-backed suites fail while the rate-limiter suite passes.
 
 ```bash
-brew services start postgresql@16
+brew services start postgresql@17   # or whichever major you have
 createuser -s postgres
 psql -d postgres -c "ALTER ROLE postgres WITH PASSWORD 'postgres';"
 createdb -O postgres rounds_test
@@ -48,6 +48,8 @@ npm run test
 ```
 
 `createuser` and `createdb` print nothing on success. If `createdb` says the database already exists, skip it.
+
+Any reasonably current Postgres major works — the schema uses only long-stable features (identity columns, CHECK constraints, unique indexes, `text[]`, `jsonb`, timestamptz). CI runs 16; being a major ahead locally is fine. If a test ever passes locally and fails in CI with something SQL-shaped, that gap is the first thing to check.
 
 ## Deploying to Vercel
 
